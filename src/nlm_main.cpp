@@ -40,6 +40,9 @@ int main(int argc, char* argv[]) {
     } else if (params.ensemble_mode) {
         if (params.verbose) std::cout << "Pipeline: Ensemble\n";
         nlm_denoise_ensemble(src, dst, params);
+    } else if (params.coarse_to_fine_mode) {
+        if (params.verbose) std::cout << "Pipeline: Coarse-to-Fine\n";
+        nlm_denoise_coarse_to_fine(src, dst, params);
     } else {
         if (params.verbose) std::cout << "Pipeline: CPU NEON+GCD\n";
         nlm_denoise_cpu_neon(src, dst, params);
@@ -92,6 +95,10 @@ int main(int argc, char* argv[]) {
         }
         if (params.ensemble_mode) {
             std::cout << "  Ensemble: " << elapsed << " s (" << t_naive / elapsed << "x vs naive, "
+                      << t_neon / elapsed << "x vs NEON)\n";
+        }
+        if (params.coarse_to_fine_mode) {
+            std::cout << "  C2F: " << elapsed << " s (" << t_naive / elapsed << "x vs naive, "
                       << t_neon / elapsed << "x vs NEON)\n";
         }
         std::cout << "  PSNR  : " << psnr_primary << " dB vs naive\n";

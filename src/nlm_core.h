@@ -37,6 +37,7 @@ struct NlmParams {
     bool wavelet_mode = false;
     bool adaptive_mode = false;
     bool ensemble_mode = false;
+    bool coarse_to_fine_mode = false;
 };
 
 Image load_image(const std::string& path);
@@ -49,4 +50,5 @@ void nlm_denoise_metal(const Image& src, Image& dst, const NlmParams& params);
 void nlm_denoise_wavelet(const Image& src, Image& dst, const NlmParams& params);
 void nlm_denoise_adaptive(const Image& src, Image& dst, const NlmParams& params);
 void nlm_denoise_ensemble(const Image& src, Image& dst, const NlmParams& params);
+void nlm_denoise_coarse_to_fine(const Image& src, Image& dst, const NlmParams& params);
 double psnr(const Image& a, const Image& b);

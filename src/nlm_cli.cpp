@@ -17,7 +17,8 @@ bool parse_args(int argc, char* argv[], NlmParams& params, std::string& input, s
                   << "  --fast              Multi-resolution (2x downsample) NLM\n"
                   << "  --wavelet           Wavelet-domain NLM (DWT + threshold)\n"
                   << "  --adaptive          Adaptive h (local variance)\n"
-                  << "  --ensemble          Multi-h ensemble (3 members)\n";
+                  << "  --ensemble          Multi-h ensemble (3 members)\n"
+                  << "  --coarse-to-fine   4x downsample → NLM → residual NLM\n";
         return false;
     }
 
@@ -52,6 +53,8 @@ bool parse_args(int argc, char* argv[], NlmParams& params, std::string& input, s
             params.adaptive_mode = true;
         } else if (arg == "--ensemble") {
             params.ensemble_mode = true;
+        } else if (arg == "--coarse-to-fine") {
+            params.coarse_to_fine_mode = true;
         } else {
             std::cerr << "Unknown argument: " << arg << "\n";
             return false;

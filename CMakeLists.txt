@@ -18,6 +18,7 @@ set(SOURCES
     src/nlm_wavelet.cpp
     src/nlm_adaptive_h.cpp
     src/nlm_ensemble.cpp
+    src/nlm_coarse_to_fine.cpp
     src/nlm_metal.mm
 )
 
