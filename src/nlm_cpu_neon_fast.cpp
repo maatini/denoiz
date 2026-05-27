@@ -1,6 +1,5 @@
 #include "nlm_core.h"
 
-#include <arm_neon.h>
 #include <dispatch/dispatch.h>
 #include <mach/mach_time.h>
 #include <Accelerate/Accelerate.h>
@@ -9,22 +8,6 @@
 #include <iostream>
 #include <cstring>
 #include <algorithm>
-
-// --- vvExp-based batched weight computation ---
-// Replaces scalar exp() calls with vectorized Accelerate exp().
-
-static void compute_weights_batch(const float* ssd_vals, float* weights,
-                                   int n, float h2_inv) {
-    // weights = exp(-ssd * h2_inv)
-    // Step 1: negate and scale: tmp = -ssd * h2_inv
-    // Using vDSP_vsmul with negative scale
-    float neg_h2_inv = -h2_inv;
-    vDSP_vsmul(ssd_vals, 1, &neg_h2_inv, weights, 1, n);
-
-    // Step 2: exp
-    int n_int = n;
-    vvexpf(weights, weights, &n_int);
-}
 
 // --- Downsampling ---
 

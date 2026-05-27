@@ -8,7 +8,6 @@
 #include <iostream>
 #include <cstring>
 #include <algorithm>
-#include <Accelerate/Accelerate.h>
 
 // NEON-optimized patch SSD for 3-channel images
 static inline float patch_ssd_neon3(const float* src, int stride,

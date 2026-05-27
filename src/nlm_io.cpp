@@ -16,12 +16,22 @@ Image load_image(const std::string& path) {
         std::cerr << "Failed to load image: " << path << "\n";
         return img;
     }
+    // Convert RGBA to RGB if loaded as 4-channel
+    int stored_channels = (c == 4) ? 3 : c;
     img.width = w;
     img.height = h;
-    img.channels = c;
-    img.data.resize(w * h * c);
-    for (size_t i = 0; i < img.data.size(); ++i) {
-        img.data[i] = pixels[i] / 255.0f;
+    img.channels = stored_channels;
+    img.data.resize(w * h * stored_channels);
+    if (c == 4) {
+        for (size_t i = 0, j = 0; i < (size_t)(w * h * 4); i += 4, j += 3) {
+            img.data[j]     = pixels[i]     / 255.0f;
+            img.data[j + 1] = pixels[i + 1] / 255.0f;
+            img.data[j + 2] = pixels[i + 2] / 255.0f;
+        }
+    } else {
+        for (size_t i = 0; i < img.data.size(); ++i) {
+            img.data[i] = pixels[i] / 255.0f;
+        }
     }
     stbi_image_free(pixels);
     return img;

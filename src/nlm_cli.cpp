@@ -1,9 +1,7 @@
 #include "nlm_core.h"
 
 #include <iostream>
-#include <cmath>
 #include <string>
-#include <cstdlib>
 
 bool parse_args(int argc, char* argv[], NlmParams& params, std::string& input, std::string& output) {
     if (argc < 3) {

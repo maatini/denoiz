@@ -28,7 +28,7 @@ void nlm_denoise_cpu(const Image& src, Image& dst, const NlmParams& params) {
     for (int y = 0; y < h; ++y) {
         for (int x = 0; x < w; ++x) {
             double total_weight = 0.0;
-            std::vector<double> accum(c, 0.0);
+            double accum[4] = {0, 0, 0, 0};
 
             int sy_min = std::max(y - half_search, 0);
             int sy_max = std::min(y + half_search, h - 1);
