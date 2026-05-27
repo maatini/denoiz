@@ -16,6 +16,7 @@ set(SOURCES
     src/nlm_cpu_neon.cpp
     src/nlm_cpu_neon_fast.cpp
     src/nlm_wavelet.cpp
+    src/nlm_adaptive_h.cpp
     src/nlm_metal.mm
 )
 

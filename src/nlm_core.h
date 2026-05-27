@@ -35,6 +35,7 @@ struct NlmParams {
     bool benchmark = false;
     bool fast_mode = false;
     bool wavelet_mode = false;
+    bool adaptive_mode = false;
 };
 
 Image load_image(const std::string& path);
@@ -45,4 +46,5 @@ void nlm_denoise_cpu_neon(const Image& src, Image& dst, const NlmParams& params)
 void nlm_denoise_cpu_neon_fast(const Image& src, Image& dst, const NlmParams& params);
 void nlm_denoise_metal(const Image& src, Image& dst, const NlmParams& params);
 void nlm_denoise_wavelet(const Image& src, Image& dst, const NlmParams& params);
+void nlm_denoise_adaptive(const Image& src, Image& dst, const NlmParams& params);
 double psnr(const Image& a, const Image& b);
