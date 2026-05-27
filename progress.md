@@ -1,46 +1,32 @@
 # NLM Denoise — Fortschritt
 
-## Aktueller Slice: Phase 6 — Wavelet-Domain NLM 🟢
+## Aktueller Slice: Phase 8 — Overlap + Ensemble 🔴
 
 ## Status
 
 | Slice | Beschreibung | Status | Datum |
 |-------|-------------|--------|-------|
-| 1 | Grundgerüst + naive Referenz | 🟢 abgeschlossen | 2026-05-27 |
-| 2 | Parallelisierung + NEON | 🟢 abgeschlossen | 2026-05-27 |
-| 3 | Metal GPU | 🟢 abgeschlossen | 2026-05-27 |
-| 4 | NPU/ANE + Optimierungen | 🟢 abgeschlossen | 2026-05-27 |
-| 5 | Finalisierung & Packaging | 🟢 abgeschlossen | 2026-05-27 |
+| 1–5 | Core Slices | 🟢 abgeschlossen | 2026-05-27 |
 | 6 | Wavelet-Domain NLM | 🟢 abgeschlossen | 2026-05-27 |
-| 7 | Adaptive h (lokal) | 🔴 nicht begonnen | — |
-| 8 | Overlap + Ensemble | ⚪ offen | — |
+| 7 | Adaptive h (lokal) | 🟢 abgeschlossen | 2026-05-27 |
+| 8 | Overlap + Ensemble | 🔴 nicht begonnen | — |
 | 9 | Coarse-to-Fine | ⚪ offen | — |
 
-## Phase 6 — Ergebnis
+## Phase 7 — Ergebnis
 
-- **2-Level Haar DWT:** Forward-Decomposition in LL, LH, HL, HH (Level 1 + 2)
-- **NLM auf LL2:** Coarsest Approximation bekommt volles NLM (reduzierter patch/search)
-- **Hard Threshold auf Details:** Rausch-Schätzung via max |HH1| / 0.6745 → Schwellwert
-- **IDWT-Rekonstruktion:** Level 2 → Level 1 → Output
-- **`--wavelet` CLI-Flag**
+- Lokale Varianz-Map (Sliding Window, Radius=min(patch,7))
+- h(x,y) = h_base × (1 + 0.5 × (var/mean_var - 1))
+- Per-Pixel Filterung: glatte Regionen → kleine h, noisy → große h
+- PSNR 77.2–77.8 dB (0.6 dB **besser** als Standard NEON 71.6 dB)
+- Laufzeit 0.62s (Scalar-SSD, nicht optimiert) — quality-first pipeline
 
-## Metriken — Wavelet vs. Standard
+## Metriken
 
-| Metrik | 256×256 | 512×512 |
-|--------|---------|---------|
-| Laufzeit Wavelet | 0.0032s | 0.015s |
-| Speedup vs naive | **1705×** | **1555×** |
-| Speedup vs NEON | **88×** | **78×** |
-| PSNR vs naive | 52.3 dB | 46.0 dB |
-
-Wavelet ist das schnellste Pipeline (3–15 ms). Qualität auf Niveau von `--fast` (multi-resolution).
-Für Preview/Rapid-Denoising ideal.
-
-## NTIRE 2025 Adaptionsquellen
-
-| Phase | Technik | Team | Ergebnis |
-|---|---|---|---|
-| 6 ✅ | Wavelet Transform Loss | SRC-B (#1, 31.20 dB) | DWT-NLM: 88× vs NEON, 52.3 dB |
-| 7 | Data Selection → Adaptives h | SRC-B (#1) | offen |
-| 8 | Overlap + Ensemble | Allgemein + SNUCV (#2) | offen |
-| 9 | Progressive Learning → Coarse-to-Fine | SRC-B (#1) | offen |
+| Pipeline | 256×256 Zeit | vs naive | vs NEON | PSNR |
+|---|---|---|---|---|
+| naive | 5.7s | 1× | — | ∞ |
+| NEON+GCD | 0.29s | 20× | 1× | 71.6 dB |
+| Metal GPU | 0.16s | 36× | 1.9× | 71.6 dB |
+| Fast | 0.09s | ~60× | 3× | 53.0 dB |
+| Wavelet | 0.003s | 1705× | 88× | 52.3 dB |
+| Adaptive | 0.62s | 9× | 0.46× | **77.8 dB** |

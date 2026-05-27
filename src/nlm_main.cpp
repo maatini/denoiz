@@ -37,6 +37,9 @@ int main(int argc, char* argv[]) {
     } else if (params.adaptive_mode) {
         if (params.verbose) std::cout << "Pipeline: Adaptive h\n";
         nlm_denoise_adaptive(src, dst, params);
+    } else if (params.ensemble_mode) {
+        if (params.verbose) std::cout << "Pipeline: Ensemble\n";
+        nlm_denoise_ensemble(src, dst, params);
     } else {
         if (params.verbose) std::cout << "Pipeline: CPU NEON+GCD\n";
         nlm_denoise_cpu_neon(src, dst, params);
@@ -85,6 +88,10 @@ int main(int argc, char* argv[]) {
         }
         if (params.adaptive_mode) {
             std::cout << "  Adaptive: " << elapsed << " s (" << t_naive / elapsed << "x vs naive, "
+                      << t_neon / elapsed << "x vs NEON)\n";
+        }
+        if (params.ensemble_mode) {
+            std::cout << "  Ensemble: " << elapsed << " s (" << t_naive / elapsed << "x vs naive, "
                       << t_neon / elapsed << "x vs NEON)\n";
         }
         std::cout << "  PSNR  : " << psnr_primary << " dB vs naive\n";
