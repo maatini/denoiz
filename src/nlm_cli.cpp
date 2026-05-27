@@ -14,7 +14,8 @@ bool parse_args(int argc, char* argv[], NlmParams& params, std::string& input, s
                   << "  --threads N         Thread count (0=auto, default: 0)\n"
                   << "  --verbose           Verbose output\n"
                   << "  --benchmark         Run naive reference + comparison\n"
-                  << "  --fast              Multi-resolution (2x downsample) NLM\n";
+                  << "  --fast              Multi-resolution (2x downsample) NLM\n"
+                  << "  --wavelet           Wavelet-domain NLM (DWT + threshold)\n";
         return false;
     }
 
@@ -43,6 +44,8 @@ bool parse_args(int argc, char* argv[], NlmParams& params, std::string& input, s
             params.benchmark = true;
         } else if (arg == "--fast") {
             params.fast_mode = true;
+        } else if (arg == "--wavelet") {
+            params.wavelet_mode = true;
         } else {
             std::cerr << "Unknown argument: " << arg << "\n";
             return false;

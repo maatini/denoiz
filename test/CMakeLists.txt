@@ -23,3 +23,10 @@ add_test(NAME nlm_denoise_gpu_benchmark
         ${CMAKE_BINARY_DIR}/test_gpu_bench.png
         --patch-size 7 --search-window 21 --h 0.1 --use-gpu --benchmark
 )
+
+add_test(NAME nlm_denoise_wavelet
+    COMMAND nlm_denoise
+        ${CMAKE_SOURCE_DIR}/test/noisy_ramp.png
+        ${CMAKE_BINARY_DIR}/test_wavelet.png
+        --patch-size 7 --search-window 21 --h 0.1 --wavelet
+)

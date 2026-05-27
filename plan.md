@@ -102,3 +102,84 @@ Jeder Slice ist vollständig lauffähig, getestet auf Apple Silicon (Devbox), mi
 - [ ] README: Build-Anleitung (Devbox), Usage, Performance-Tabelle (M1–M4), Limitationen
 
 **Metriken:** Alle Tests grün, Build reproduzierbar
+
+---
+
+### Phase 6 — Wavelet-Domain NLM (NTIRE 2025 Adaption)
+
+**Quelle:** SRC-B (Platz 1, 31.20 dB) — Wavelet Transform Loss als Kerninnovation.
+
+**Ziel:** NLM in DWT-Koeffizienten statt Pixel-Domain → bessere Kantenerhaltung.
+
+- [ ] 2-Level DWT (Haar/CDF 9/7) via Accelerate/vDSP
+- [ ] NLM auf LL-Subband mit reduziertem search_window
+- [ ] Thresholding auf LH, HL, HH (VisuShrink / BayesShrink)
+- [ ] Adaptive h aus DWT-Koeffizienten (HH-Subband)
+- [ ] IDWT-Inverse → Output
+- [ ] `--wavelet` CLI-Flag
+- [ ] Test: PSNR-Vergleich Pixel-NLM vs Wavelet-NLM
+- [ ] Benchmark: Laufzeit Wavelet vs Standard
+
+**Metriken:** PSNR +0.5–1.5 dB, Kantenerhalt visuell sichtbar
+
+---
+
+### Phase 7 — Adaptive h (lokal, NTIRE 2025 Adaption)
+
+**Quelle:** SRC-B Data Selection → lokale Bildstatistik steuert Filtergrad.
+
+**Ziel:** Globales h durch lokale Schätzung ersetzen.
+
+- [ ] Noise-Level Estimation (MAD auf HH-Koeffizienten)
+- [ ] Lokale h-Map: h(x,y) = h_global * (1 + α * variance_patch(x,y))
+- [ ] Metal-Integration: h als texture buffer statt scalar
+- [ ] `--adaptive` CLI-Flag
+- [ ] Test: PSNR-Vergleich global vs adaptiv
+
+**Metriken:** PSNR +0.2–0.5 dB, weniger Detailverlust in glatten Regionen
+
+---
+
+### Phase 8 — Overlapping Patches + Multi-h Ensemble (NTIRE 2025 Adaption)
+
+**Quelle:** Overlapping Patches (allgemein), Ensemble (SNUCV Platz 2).
+
+**Ziel:** Inference-Qualität durch Overlap und Ensemble steigern.
+
+- [ ] Overlapping Search: stride = patch_size / 2 mit Weighted Blending
+- [ ] Multi-h Ensemble: 3 Durchläufe mit h-δ, h, h+δ, Output-Mittelung
+- [ ] GCD-Parallel über Ensemble-Members
+- [ ] `--ensemble` CLI-Flag
+- [ ] Test: PSNR single-h vs ensemble
+
+**Metriken:** PSNR +0.3–0.8 dB
+
+---
+
+### Phase 9 — Coarse-to-Fine Refinement (NTIRE 2025 Adaption)
+
+**Quelle:** Progressive Learning Strategy → iterative Verfeinerung.
+
+**Ziel:** Mehrstufige NLM-Anwendung.
+
+- [ ] Stufe 1: 4× Downsample → NLM (grob)
+- [ ] Stufe 2: Upsample → Residual = noisy - coarse
+- [ ] Stufe 3: NLM auf Residual (feine Details)
+- [ ] Output = coarse + refined_residual
+- [ ] Test: PSNR single-pass vs multi-pass
+
+**Metriken:** PSNR +0.2–0.4 dB
+
+---
+
+## NTIRE 2025 Adaptionsquellen
+
+| Phase | NTIRE-Technik | Team | Adaption |
+|---|---|---|---|
+| 6 | Wavelet Transform Loss | SRC-B (#1) | DWT+IDWT NLM |
+| 7 | Data Selection | SRC-B (#1) | Adaptive lokale h-Map |
+| 8 | Overlapping Patches | Allgemein | Overlap Search + Blend |
+| 8 | Model Ensemble | SNUCV (#2) | Multi-h Ensemble |
+| 9 | Progressive Learning | SRC-B (#1) | Coarse-to-Fine Pipeline |
+
+Nicht adaptiert (DL-spezifisch): Hybrid Transformer+CNN, Data Selection, Model Ensemble (multi-model).

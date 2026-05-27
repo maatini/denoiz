@@ -31,6 +31,9 @@ int main(int argc, char* argv[]) {
     } else if (params.fast_mode) {
         if (params.verbose) std::cout << "Pipeline: Fast (multi-resolution)\n";
         nlm_denoise_cpu_neon_fast(src, dst, params);
+    } else if (params.wavelet_mode) {
+        if (params.verbose) std::cout << "Pipeline: Wavelet\n";
+        nlm_denoise_wavelet(src, dst, params);
     } else {
         if (params.verbose) std::cout << "Pipeline: CPU NEON+GCD\n";
         nlm_denoise_cpu_neon(src, dst, params);
@@ -71,6 +74,10 @@ int main(int argc, char* argv[]) {
         }
         if (params.fast_mode) {
             std::cout << "  Fast  : " << elapsed << " s (" << t_naive / elapsed << "x vs naive, "
+                      << t_neon / elapsed << "x vs NEON)\n";
+        }
+        if (params.wavelet_mode) {
+            std::cout << "  Wavelet: " << elapsed << " s (" << t_naive / elapsed << "x vs naive, "
                       << t_neon / elapsed << "x vs NEON)\n";
         }
         std::cout << "  PSNR  : " << psnr_primary << " dB vs naive\n";
