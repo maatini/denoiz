@@ -2,6 +2,8 @@
 
 High-performance Non-Local Means (NLM) image denoising CLI, optimized for Apple Silicon (M1–M4). 8 denoising pipelines: Metal GPU, ARM NEON + GCD, Wavelet-domain, Adaptive h, Coarse-to-Fine, and more. Research-backed adaptations from NTIRE 2025 Challenge (SRC-B #1, 31.20 dB).
 
+![Denoiz](denoiz.png)
+
 ## Prerequisites
 
 Devbox only. No system dependencies beyond what devbox provides.
