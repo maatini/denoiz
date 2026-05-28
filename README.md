@@ -3,9 +3,13 @@
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-blue)](https://en.cppreference.com/w/cpp/20)
 [![macOS](https://img.shields.io/badge/platform-macOS%20Apple%20Silicon-lightgrey)](https://www.apple.com/mac/)
 [![Metal](https://img.shields.io/badge/GPU-Metal-purple)](https://developer.apple.com/metal/)
+[![FFmpeg](https://img.shields.io/badge/media-FFmpeg-green)](https://ffmpeg.org)
 [![Devbox](https://img.shields.io/badge/build-devbox-blue)](https://www.jetify.com/devbox/)
 
-High-performance Non-Local Means (NLM) image denoising CLI, optimized for Apple Silicon (M1–M4). 8 denoising pipelines: Metal GPU, ARM NEON + GCD, Wavelet-domain, Adaptive h, Coarse-to-Fine, and more. Research-backed adaptations from NTIRE 2025 Challenge (SRC-B #1, 31.20 dB).
+High-performance Non-Local Means (NLM) denoising for Apple Silicon (M1–M4). Two tools:
+
+- **nlm_denoise** — image denoising CLI with 8 pipelines: Metal GPU, ARM NEON + GCD, Wavelet, Adaptive h, Coarse-to-Fine, and more. Research-backed adaptations from NTIRE 2025 Challenge (SRC-B #1, 31.20 dB).
+- **nlm-video** — video denoising CLI with temporal NLM, content presets, async GPU pipeline. FFmpeg-based.
 
 ![Denoiz](denoiz.png)
 
@@ -20,10 +24,12 @@ cd nlm
 devbox shell
 devbox run build
 devbox run test
-devbox run install   # → install/bin/nlm_denoise
+devbox run install   # → install/bin/nlm_denoise  +  install/bin/nlm-video
 ```
 
-## Usage
+## nlm_denoise (images)
+
+### Usage
 
 ```
 nlm_denoise input.png output.png [options]
@@ -33,19 +39,19 @@ nlm_denoise input.png output.png [options]
 
 | Parameter | Typ | Default | Beschreibung |
 |-----------|-----|---------|-------------|
-| `--patch-size N` | int (ungerade) | 7 | Seitenlänge des Vergleichs-Patches in Pixeln. Der NLM-Algorithmus vergleicht kleine Bildausschnitte (Patches) um jedes Pixel, um ähnliche Regionen zu finden. Ein größerer Patch erfasst mehr Struktur (Texturen, Kanten), kostet aber quadratisch mehr Rechenzeit: O(p²). Wertebereich typisch 3–11. Muss ungerade sein, damit ein klares Zentrumspixel existiert. |
-| `--search-window N` | int (ungerade) | 21 | Radius des Suchfensters in Pixeln. Definiert, wie weit vom aktuellen Pixel nach ähnlichen Patches gesucht wird. Größere Fenster finden mehr Patch-Kandidaten (bessere Rauschentfernung), aber Laufzeit skaliert mit O(sw²). Das gesamte Suchfenster ist (2N+1)×(2N+1) Pixel groß. Typischer Bereich: 7–35. |
-| `--h FLOAT` | float (>0) | 0.1 | Filterstärke (bandwidth parameter). Steuert, wie stark ähnliche Patches gewichtet werden. Pixelgewichte werden als exp(−SSD / h²) berechnet, wobei SSD die Summe der quadrierten Patch-Differenzen ist. Kleines h (0.05): nur sehr ähnliche Patches zählen → schwache Glättung, Details bleiben erhalten. Großes h (0.5): viele Patches zählen → starke Glättung, Rauschen wird effektiv entfernt. Typischer Bereich: 0.05–0.5. |
-| `--sigma FLOAT` | float | 0.0 | Erwartetes Rausch-Sigma des Eingabebildes. **Derzeit reserviert** – das Rauschen wird nicht auf das Bild angewendet. Der Parameter existiert für Pipeline-Kompatibilität und zukünftige adaptive Rauschmodellierung. Bei `--verbose` wird ein Hinweis ausgegeben, wenn sigma > 0 gesetzt ist. |
-| `--use-gpu` | flag | false | Nutzt die Apple GPU (Metal Shading Language) für die NLM-Berechnung. Threadgruppen werden über den gesamten Pixelraum verteilt. Liefert pixelgenau das gleiche Ergebnis wie die NEON-CPU-Pipeline (bit-identisch). Beste Balance aus Geschwindigkeit und Qualität (36× Speedup auf M2 bei 256×256). Hardware-Voraussetzung: Apple Silicon (M1–M4) mit Metal 3. |
-| `--fast` | flag | false | Multi-Resolution-Ansatz: das Eingabebild wird um Faktor 2 herunterskaliert, NLM wird auf dem verkleinerten Bild ausgeführt, dann wird das Ergebnis wieder hochskaliert. Etwa 4× weniger Pixel zu verarbeiten → 60× Speedup. Qualitätseinbuße durch Down-/Upsampling (53 dB vs 71.6 dB auf 256×256). Geeignet für schnelle Vorschau oder Batch-Verarbeitung. |
-| `--wavelet` | flag | false | Wavelet-Domain NLM: 2-stufige Haar-2D-DWT → NLM auf den Wavelet-Koeffizienten → Thresholding (weiche Schwelle) → inverse DWT. Nutzt Apple Accelerate (vDSP) für die DWT. Extrem schnell (1705× auf 256×256, <1 ms), da die DWT die Bildinformation komprimiert und NLM weniger Pixel verarbeiten muss. Geeignet für Echtzeit-Vorschau und Thumbnails. |
-| `--adaptive` | flag | false | Adaptive h: berechnet pro Pixel die lokale Varianz (über ein 3×3-Fenster auf dem Luminanzkanal) und leitet daraus ein per-pixel h ab. In homogenen Regionen (niedrige Varianz) wird ein niedrigeres h verwendet → stärkere Glättung. An Kanten (hohe Varianz) wird ein höheres h verwendet → Detailerhalt. Nutzt Apple Accelerate vDSP für die Varianzberechnung. Beste PSNR aller Pipelines (77.8 dB, +6 dB über NEON). |
-| `--ensemble` | flag | false | Multi-h Ensemble: führt NLM dreimal mit unterschiedlichen h-Werten aus (h, 0.5h, 1.5h) und mittelt die Ergebnisse. **Experimentell** – in der Praxis wurde kein signifikanter Qualitätsgewinn beobachtet. Ansatz stammt aus NTIRE 2025 Model Ensemble (DL-spezifisch, für NLM nicht effektiv). |
-| `--coarse-to-fine` | flag | false | Grob-zu-Fein-Verfeinerung: 4× Downsample → NLM auf grober Auflösung → Residual = Input − Coarse berechnen → NLM auf dem Residual → Output = Coarse + geglättetes Residual. Progressive Refinement-Strategie. 55× Speedup auf 256×256. PSNR niedriger als NEON, aber höher als Fast. NTIRE-Adaption: Progressive Learning. |
-| `--benchmark` | flag | false | Benchmark-Modus: führt zusätzlich die naive CPU-Referenz und die NEON+GCD-Pipeline aus und gibt einen Vergleichsreport aus (Laufzeiten, Speedups vs. Naive und vs. NEON, PSNR der gewählten Pipeline gegen die Naive-Referenz). Erhöht die Gesamtlaufzeit durch die zusätzlichen Durchläufe. |
-| `--threads N\|auto` | int/string | auto | Anzahl der GCD-Threads für CPU-Pipelines. `0` oder `auto` nutzt alle verfügbaren Kerne (via `dispatch_apply`). Bei expliziten Werten wird die Thread-Anzahl begrenzt. Nützlich für Benchmarking oder wenn andere Prozesse geschont werden sollen. Betrifft nur CPU-Pipelines; GPU-Pipeline läuft unabhängig. |
-| `--verbose` | flag | false | Ausführliche Ausgabe: Name der gewählten Pipeline, Bilddimensionen, Parameter (`patch`, `search`, `h`), Fortschrittsanzeige (Zeilenzähler), und Wall-Clock-Laufzeit in Sekunden. Hilfreich für Debugging und Performance-Profiling. |
+| `--patch-size N` | int (ungerade) | 7 | Seitenlänge des Vergleichs-Patches. Größer = mehr Struktur, quadratisch mehr Rechenzeit. Typisch 3–11. |
+| `--search-window N` | int (ungerade) | 21 | Radius des Suchfensters. Größer = mehr Kandidaten, O(sw²) Laufzeit. Typisch 7–35. |
+| `--h FLOAT` | float (>0) | 0.1 | Filterstärke. Gewichte = exp(−SSD/h²). Klein (0.05) = Details erhalten, groß (0.5) = starke Glättung. Typisch 0.05–0.5. |
+| `--sigma FLOAT` | float | 0.0 | Rausch-Sigma (reserviert, nicht angewendet). |
+| `--use-gpu` | flag | false | Metal GPU (Apple Silicon). Bit-identisch zu NEON, 36× Speedup. |
+| `--fast` | flag | false | Multi-Resolution: 2× downsample → NLM → upsample. 60× Speedup. |
+| `--wavelet` | flag | false | Wavelet-Domain NLM: 2-level DWT + threshold. 1705× Speedup, <1ms. |
+| `--adaptive` | flag | false | Per-Pixel adaptive h via local variance. Beste PSNR (+6 dB). |
+| `--ensemble` | flag | false | Multi-h Ensemble (3 members). Experimental, kein messbarer Gain. |
+| `--coarse-to-fine` | flag | false | 4× downsample → coarse NLM → residual refinement. 55× Speedup. |
+| `--benchmark` | flag | false | Laufzeitvergleich mit naiver Referenz + NEON. |
+| `--threads N\|auto` | int/string | auto | GCD-Threads für CPU-Pipelines. |
+| `--verbose` | flag | false | Pipeline-Name, Dimensionen, Parameter, Fortschritt, Laufzeit. |
 
 ### Examples
 
@@ -63,11 +69,11 @@ nlm_denoise noisy.jpg clean.png --wavelet --h 0.1
 nlm_denoise noisy.jpg /dev/null --use-gpu --benchmark
 ```
 
-## Performance (Apple M2, 256×256 RGB, patch=7, search=21, h=0.1)
+### Performance (Apple M2, 256×256 RGB, patch=7, search=21, h=0.1)
 
-| Pipeline          | Laufzeit | Speedup vs naive | PSNR     | Use case       |
+| Pipeline          | Laufzeit | Speedup vs naïve | PSNR     | Use case       |
 |-------------------|----------|-------------------|----------|----------------|
-| Naive             | 5.5s     | 1.0×              | ∞ (ref)  | Baseline       |
+| Naïve             | 5.5s     | 1.0×              | ∞ (ref)  | Baseline       |
 | Adaptive h        | 0.62s    | 9×                | **77.8 dB** | Quality-first |
 | NEON + GCD        | 0.29s    | 20×               | 71.6 dB  | Default CPU    |
 | Metal GPU         | 0.16s    | 36×               | 71.6 dB  | Best balance   |
@@ -75,11 +81,11 @@ nlm_denoise noisy.jpg /dev/null --use-gpu --benchmark
 | Fast (multi-res)  | 0.09s    | 60×               | 53.0 dB  | Fast preview   |
 | Wavelet           | 0.003s   | 1705×             | 52.3 dB  | Real-time      |
 
-## Performance (Apple M2, 512×512 RGB)
+### Performance (Apple M2, 512×512 RGB)
 
-| Pipeline          | Laufzeit | Speedup vs naive | PSNR     |
+| Pipeline          | Laufzeit | Speedup vs naïve | PSNR     |
 |-------------------|----------|-------------------|----------|
-| Naive             | 23.3s    | 1.0×              | ∞        |
+| Naïve             | 23.3s    | 1.0×              | ∞        |
 | Adaptive h        | 2.5s     | 9×                | **77.8 dB** |
 | NEON + GCD        | 1.2s     | 19×               | 74.8 dB  |
 | Metal GPU         | 0.37s    | 63×               | 74.8 dB  |
@@ -87,7 +93,7 @@ nlm_denoise noisy.jpg /dev/null --use-gpu --benchmark
 | Fast (multi-res)  | 0.30s    | 79×               | 52.9 dB  |
 | Wavelet           | 0.015s   | 1555×             | 46.0 dB  |
 
-## Pipeline Selection Guide
+### Pipeline Selection Guide
 
 | Goal              | Pipeline          | Why                                          |
 |-------------------|-------------------|----------------------------------------------|
@@ -95,7 +101,81 @@ nlm_denoise noisy.jpg /dev/null --use-gpu --benchmark
 | Best speed+qty    | `--use-gpu`       | Metal GPU, 36×, bit-identical quality        |
 | Real-time preview | `--wavelet`       | DWT-domain, 1705×, <1ms for thumbnails       |
 | Quick export      | `--fast`          | Multi-resolution, 60×, no GPU needed         |
-| Research baseline | `--coarse-to-fine`| Progressive refinement, 55×                   |
+| Research baseline | `--coarse-to-fine`| Progressive refinement, 55×                  |
+
+---
+
+## nlm-video (videos)
+
+### Usage
+
+```
+nlm-video input.mp4 output.mp4 [options]
+```
+
+### Parameter
+
+| Parameter | Typ | Default | Beschreibung |
+|-----------|-----|---------|-------------|
+| `--preset PRESET` | string | medium | Speed: veryslow/slow/medium/fast/veryfast. Content: film/grain/lowlight/animation. |
+| `--strength FLOAT` | float | 0.5 | Denoising strength 0.0–1.0, mapped to NLM filter strength h. |
+| `--crf N` | int | 18 | Output quality (x264/x265 rate control). Lower = better, 0–51. |
+| `--codec CODEC` | string | h264 | Output codec: h264, h265, av1. |
+| `--temporal` | flag | false | Multi-frame temporal denoising (reduces flicker between frames). |
+| `--frame-count N` | int | 3 | Temporal frames to buffer. Range 1–7. |
+| `--temporal-weight FLOAT` | float | 0.8 | Weight decay per frame offset. 0.0–1.0. |
+| `--sharpen FLOAT` | float | 0.0 | Unsharp mask amount after NLM, 0.0–2.0. 0.0 = off. |
+| `--frames-out DIR` | string | — | Save denoised frames as PNG sequence (skips video encoding). |
+| `--deinterlace` | flag | false | YADIF deinterlacing on input (reserved). |
+| `--use-gpu` | flag | false | Force Metal GPU pipeline. |
+| `--verbose` | flag | false | Progress with percentage, fps, ETA. |
+| `--benchmark` | flag | false | Per-frame NLM timing, fps summary. |
+
+### Examples
+
+```bash
+# Quality-first: film preset (adaptive h)
+nlm-video noisy.mp4 clean.mp4 --preset film
+
+# Fast: grain preset + sharpen
+nlm-video noisy.mp4 clean.mp4 --preset grain --sharpen 0.5
+
+# Temporal denoising (reduces flicker)
+nlm-video noisy.mp4 clean.mp4 --temporal --frame-count 5
+
+# Export frames only (no video re-encode)
+nlm-video noisy.mp4 /dev/null --frames-out ./denoised_frames
+
+# H.265 output
+nlm-video noisy.mp4 clean.mp4 --preset film --codec h265
+```
+
+### Performance (Apple M2, 320×240, 25fps)
+
+| Preset      | fps    |
+|-------------|--------|
+| film        | 83     |
+| grain       | 124    |
+| lowlight    | 122    |
+| animation   | 123    |
+
+### Performance (Apple M2, 640×480, 25fps)
+
+| Preset      | fps    |
+|-------------|--------|
+| medium      | 20     |
+
+### Preset Selection Guide
+
+| Goal              | Preset            | Why                                          |
+|-------------------|-------------------|----------------------------------------------|
+| Real film grain   | `film`            | Adaptive h, sharp details, smooth grain      |
+| Heavy noise/grain | `grain`           | Metal GPU, high h, aggressive denoising      |
+| Low-light footage | `lowlight`        | Adaptive h, small patch, fine texture        |
+| Animation/cartoon | `animation`       | Wavelet, fast, effective on flat regions     |
+| Reduce flicker    | `--temporal`      | Multi-frame averaging across N frames        |
+
+---
 
 ## NTIRE 2025 Adaptions
 
@@ -114,29 +194,31 @@ See `src/nlm_ane_analysis.txt` for ANE feasibility study.
 
 ```
 src/
-  nlm_core.h              Shared types (Image, NlmParams)
-  nlm_cli.cpp             CLI argument parsing
-  nlm_io.cpp              PNG I/O via stb_image (RGBA→RGB conversion)
-  nlm_main.cpp            Entry point + benchmark runner
-  nlm_cpu.cpp             Naive reference (quality baseline)
-  nlm_cpu_neon.cpp        ARM NEON intrinsics + GCD dispatch_apply
-  nlm_cpu_neon_fast.cpp   Multi-resolution (downsample → NLM → upsample)
-  nlm_wavelet.cpp         Wavelet-domain: 2-level DWT + NLM + threshold
-  nlm_adaptive_h.cpp      Adaptive h: local variance → per-pixel filter strength
-  nlm_ensemble.cpp        Multi-h ensemble (3 members, experimental)
-  nlm_coarse_to_fine.cpp  Coarse-to-fine: 2× down → coarse NLM → residual → fine NLM
-  nlm_metal.mm            Metal GPU compute pipeline (embedded shader)
-  nlm_metal_kernels.metal Original Metal source (preserved, not used at runtime)
-  nlm_ane_analysis.txt    ANE/NPU feasibility analysis
+  nlm_core.h                  Shared types (Image, NlmParams)
+  nlm_cli.cpp                 CLI argument parsing
+  nlm_io.cpp                  PNG I/O via stb_image (RGBA→RGB conversion)
+  nlm_main.cpp                Entry point + benchmark runner
+  nlm_cpu.cpp                 Naive reference (quality baseline)
+  nlm_cpu_neon.cpp            ARM NEON intrinsics + GCD dispatch_apply
+  nlm_cpu_neon_fast.cpp       Multi-resolution (downsample → NLM → upsample)
+  nlm_wavelet.cpp             Wavelet-domain: 2-level DWT + NLM + threshold
+  nlm_adaptive_h.cpp          Adaptive h: local variance → per-pixel filter strength
+  nlm_ensemble.cpp            Multi-h ensemble (3 members, experimental)
+  nlm_coarse_to_fine.cpp      Coarse-to-fine: 2× down → coarse NLM → residual → fine NLM
+  nlm_metal.mm                Metal GPU compute pipeline (embedded shader)
+  nlm_metal_kernels.metal     Original Metal source (preserved, not used at runtime)
+  nlm_ane_analysis.txt        ANE/NPU feasibility analysis
+  nlm_video_main.cpp          nlm-video entry + FFmpeg pipeline
+  nlm_video_temporal.h/cpp    Temporal multi-frame NLM denoiser
 test/
-  run_tests.py            Test suite (ground truth, grayscale, edge cases, CLI)
-  generate_images.py      Test image generator
-  gen_large.py            Large test image generator
+  run_tests.py        Test suite (ground truth, grayscale, edge cases, CLI)
+  generate_images.py  Test image generator
+  gen_large.py        Large test image generator
 ```
 
 ## Limitations
 
-- PNG output only (stb_image_write PNG backend)
+- PNG output only for nlm_denoise (stb_image_write PNG backend)
 - Metal GPU: requires macOS with Apple Silicon GPU
 - No color management / gamma correction
 - `--sigma` parameter reserved for future noise application
