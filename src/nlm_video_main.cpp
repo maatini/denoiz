@@ -107,7 +107,7 @@ static void apply_sharpen(Image& img, float amount) {
     }
 }
 
-struct PendingState { Image src,dst; bool valid=false; double nlm_ms=0; };
+struct PendingState { Image src,dst; bool valid=false; double nlm_ms=0; int64_t pts=0; };
 
 int main(int argc, char* argv[]) {
     VideoConfig c;
@@ -216,6 +216,7 @@ int main(int argc, char* argv[]) {
                     v=p->dst.at(x,y,1);v=v<0?0:v>1?1:v;r[x*3+1]=(uint8_t)(v*255+0.5f);
                     v=p->dst.at(x,y,2);v=v<0?0:v>1?1:v;r[x*3+2]=(uint8_t)(v*255+0.5f); } }
             sws_scale(from_rgb,rf->data,rf->linesize,0,H,ef->data,ef->linesize);
+            ef->pts = p->pts;
             if (avcodec_send_frame(ectx,ef)<0) std::cerr<<"Error: send frame\n";
             while (avcodec_receive_packet(ectx,op)==0) {
                 op->stream_index=ovs->index;
@@ -242,7 +243,7 @@ int main(int argc, char* argv[]) {
             for (int y=0;y<H;y++) { const uint8_t* r=rf->data[0]+y*rf->linesize[0];
                 for (int x=0;x<W;x++) { int o=(y*W+x)*3;
                     cur.data[o]=r[x*3]/255.0f;cur.data[o+1]=r[x*3+1]/255.0f;cur.data[o+2]=r[x*3+2]/255.0f; } }
-            p->src=cur; p->valid=true;
+            p->src=cur; p->valid=true; p->pts=df->pts;
             dispatch_async(nlmq,^{ auto t0=std::chrono::high_resolution_clock::now(); Image r;
                 if (td) r=td->denoise(p->src); else pipeline(p->src,r,np);
                 auto t1=std::chrono::high_resolution_clock::now();
