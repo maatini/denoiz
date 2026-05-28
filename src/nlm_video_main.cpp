@@ -10,6 +10,7 @@ extern "C" {
 #include "nlm_video_temporal.h"
 
 #include <iostream>
+#include <iomanip>
 #include <vector>
 #include <cstring>
 #include <chrono>
@@ -21,6 +22,7 @@ struct VideoConfig {
     std::string input_path;
     std::string output_path;
     std::string preset = "medium";
+    std::string codec = "h264";
     float strength = 0.5f;
     int crf = 18;
     bool verbose = false;
@@ -48,6 +50,10 @@ Options:
                        x264/x265 rate control
   --verbose          Show progress per frame
   --benchmark        Show per-frame timing and fps summary
+  --codec CODEC      Output codec: h264, h265, av1 (default: h264)
+  --preset PRESET    Quality/speed tradeoff or content type:
+                       content presets: film, grain, lowlight, animation
+                       speed presets (as above)
   --help             Show this message
 )";
 
@@ -77,6 +83,10 @@ static bool parse_video_args(int argc, char* argv[], VideoConfig& config) {
             config.temporal_weight = std::stof(argv[++i]);
         } else if (arg == "--benchmark") {
             config.benchmark = true;
+        } else if (arg == "--codec" && i + 1 < argc) {
+            config.codec = argv[++i];
+        } else if (arg == "--preset" && i + 1 < argc) {
+            config.preset = argv[++i];
         } else if (arg == "--help") {
             std::cout << USAGE;
             return false;
@@ -117,6 +127,33 @@ static NlmPipelineFn resolve_pipeline(const VideoConfig& config, NlmParams& para
     params.patch_size = 7;
     params.search_window = 21;
 
+    // Content presets (override all settings)
+    if (config.preset == "film") {
+        params.h = 0.08f;
+        params.patch_size = 7;
+        params.search_window = 15;
+        return nlm_denoise_adaptive;
+    }
+    if (config.preset == "grain") {
+        params.h = 0.15f;
+        params.patch_size = 5;
+        params.search_window = 21;
+        return nlm_denoise_metal;
+    }
+    if (config.preset == "lowlight") {
+        params.h = 0.05f;
+        params.patch_size = 5;
+        params.search_window = 21;
+        return nlm_denoise_adaptive;
+    }
+    if (config.preset == "animation") {
+        params.h = 0.05f;
+        params.patch_size = 5;
+        params.search_window = 15;
+        return nlm_denoise_wavelet;
+    }
+
+    // Speed presets
     if (config.preset == "veryslow") {
         return nlm_denoise_adaptive;
     } else if (config.preset == "slow") {
@@ -194,15 +231,29 @@ int main(int argc, char* argv[]) {
                   << " fps=" << av_q2d(in_video_stream->avg_frame_rate) << "\n";
         std::cout << "Preset: " << config.preset
                   << " strength=" << config.strength
-                  << " h=" << nlm_params.h << "\n";
+                  << " h=" << nlm_params.h
+                  << " patch=" << nlm_params.patch_size
+                  << " search=" << nlm_params.search_window << "\n";
     }
 
     AVFormatContext* out_fmt = nullptr;
     avformat_alloc_output_context2(&out_fmt, nullptr, nullptr, config.output_path.c_str());
     if (!out_fmt) { std::cerr << "Error: cannot create output\n"; return 1; }
 
-    const AVCodec* encoder = avcodec_find_encoder(AV_CODEC_ID_H264);
-    if (!encoder) { std::cerr << "Error: H.264 encoder not available\n"; return 1; }
+    // Codec selection
+    AVCodecID enc_id = AV_CODEC_ID_H264;
+    if (config.codec == "h265" || config.codec == "hevc") {
+        enc_id = AV_CODEC_ID_HEVC;
+    } else if (config.codec == "av1") {
+        enc_id = AV_CODEC_ID_AV1;
+    }
+    const AVCodec* encoder = avcodec_find_encoder(enc_id);
+    if (!encoder) {
+        std::cerr << "Error: encoder for " << config.codec << " not available, falling back to h264\n";
+        encoder = avcodec_find_encoder(AV_CODEC_ID_H264);
+        enc_id = AV_CODEC_ID_H264;
+    }
+    if (!encoder) { std::cerr << "Error: no encoder available\n"; return 1; }
     AVCodecContext* enc_ctx = avcodec_alloc_context3(encoder);
     enc_ctx->width = width;
     enc_ctx->height = height;
@@ -253,7 +304,9 @@ int main(int argc, char* argv[]) {
         std::cerr << "Error: cannot create swscale contexts\n"; return 1;
     }
 
-    // --- 8. Frame buffers ---
+    if (config.verbose) {
+        std::cout << "Output codec: " << config.codec << "\n";
+    }
     AVFrame* dec_frame = av_frame_alloc();
     AVFrame* rgb_frame = av_frame_alloc();
     rgb_frame->format = AV_PIX_FMT_RGB24;
@@ -283,6 +336,34 @@ int main(int argc, char* argv[]) {
                                  (double)in_fmt->duration *
                                  av_q2d(in_video_stream->avg_frame_rate));
     }
+
+    double etime_sum = 0;
+    int etime_samples = 0;
+
+    // Scene detection: histogram difference between consecutive frames
+    int prev_frame_hist[3] = {0, 0, 0};
+    bool prev_hist_valid = false;
+    auto detect_scene = [&](const uint8_t* rgb_data) {
+        int hist[3] = {0, 0, 0};
+        for (int i = 0; i < width * height; i++) {
+            hist[0] += rgb_data[i * 3];
+            hist[1] += rgb_data[i * 3 + 1];
+            hist[2] += rgb_data[i * 3 + 2];
+        }
+        if (!prev_hist_valid) {
+            for (int c = 0; c < 3; c++) prev_frame_hist[c] = hist[c];
+            prev_hist_valid = true;
+            return false;
+        }
+        double diff = 0;
+        for (int c = 0; c < 3; c++) {
+            double d = (double)(hist[c] - prev_frame_hist[c]);
+            diff += d * d;
+        }
+        diff = std::sqrt(diff) / (width * height);
+        for (int c = 0; c < 3; c++) prev_frame_hist[c] = hist[c];
+        return diff > 5.0;
+    };
 
     __block Image pending_src, pending_dst;
     __block bool pending_valid = false;
@@ -389,13 +470,31 @@ int main(int argc, char* argv[]) {
 
             frame_num++;
             if (config.verbose) {
+                etime_samples++;
+                auto tnow = std::chrono::high_resolution_clock::now();
+                double elapsed_s = std::chrono::duration<double>(tnow - wall_start).count();
+                double fps = frame_num / elapsed_s;
+                double eta = (total_frames > 0 && etime_samples > 1)
+                    ? (total_frames - frame_num) / fps : 0;
+
                 if (total_frames > 0) {
                     int pct = (int)(frame_num * 100 / total_frames);
-                    std::cout << "\r  frame " << frame_num << "/" << total_frames
-                              << " (" << pct << "%)" << std::flush;
+                    std::cout << "\r  [" << pct << "%] frame " << frame_num << "/" << total_frames
+                              << " @ " << std::fixed << std::setprecision(1) << fps << " fps";
+                    if (eta > 0) {
+                        std::cout << " ETA " << (int)eta << "s";
+                    }
                 } else {
-                    std::cout << "\r  frame " << frame_num << std::flush;
+                    std::cout << "\r  frame " << frame_num;
                 }
+
+                // Scene detection log
+                const uint8_t* rgb_data = rgb_frame->data[0];
+                if (detect_scene(rgb_data)) {
+                    std::cout << " [new scene]\n";
+                }
+
+                std::cout << std::flush;
             }
 
             av_frame_unref(dec_frame);
