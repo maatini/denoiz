@@ -8,8 +8,11 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -flto -ffast-math -march=armv8.5-a -mtune=apple-m1")
 set(CMAKE_OBJCXX_FLAGS_RELEASE "-O3 -flto -ffast-math -march=armv8.5-a -mtune=apple-m1")
 
-set(SOURCES
-    src/nlm_main.cpp
+# ── FFmpeg via pkg-config ──────────────────────────────────────────────
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(FFMPEG REQUIRED libavcodec libavformat libswscale libavutil)
+
+set(NLM_SOURCES
     src/nlm_cli.cpp
     src/nlm_io.cpp
     src/nlm_cpu.cpp
@@ -22,7 +25,8 @@ set(SOURCES
     src/nlm_metal.mm
 )
 
-add_executable(nlm_denoise ${SOURCES})
+# ── nlm_denoise ────────────────────────────────────────────────────────
+add_executable(nlm_denoise src/nlm_main.cpp ${NLM_SOURCES})
 
 target_include_directories(nlm_denoise PRIVATE src)
 
@@ -33,7 +37,27 @@ target_link_libraries(nlm_denoise PRIVATE
     "-framework Accelerate"
 )
 
+# ── nlm-video ──────────────────────────────────────────────────────────
+add_executable(nlm-video src/nlm_video_main.cpp ${NLM_SOURCES})
+
+target_include_directories(nlm-video PRIVATE
+    src
+    ${FFMPEG_INCLUDE_DIRS}
+)
+
+target_link_libraries(nlm-video PRIVATE
+    ${FFMPEG_LIBRARIES}
+    "-framework Foundation"
+    "-framework Metal"
+    "-framework CoreGraphics"
+    "-framework Accelerate"
+)
+
+target_link_options(nlm-video PRIVATE ${FFMPEG_LDFLAGS})
+
+# ── Tests / Install ────────────────────────────────────────────────────
 enable_testing()
 add_subdirectory(test)
 
 install(TARGETS nlm_denoise RUNTIME DESTINATION bin)
+install(TARGETS nlm-video RUNTIME DESTINATION bin)
