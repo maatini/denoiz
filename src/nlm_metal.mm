@@ -4,10 +4,13 @@
 #import <Foundation/Foundation.h>
 
 #include <iostream>
+#include <dispatch/dispatch.h>
 
 static id<MTLDevice> g_device = nil;
 static id<MTLCommandQueue> g_queue = nil;
 static id<MTLComputePipelineState> g_pipeline = nil;
+static NSUInteger g_tg_w = 16;
+static NSUInteger g_tg_h = 16;
 
 static const char kMetalKernelSource[] = R"METAL(
 #include <metal_stdlib>
@@ -114,24 +117,42 @@ static bool init_metal() {
         return false;
     }
 
-    if ([g_device supportsFamily:MTLGPUFamilyApple7]) {
-        if (g_verbose_once) std::cout << "Metal: Apple GPU family 7+ (M2 or later)\n";
+    // Tune threadgroup size per GPU generation
+    NSUInteger execWidth = g_pipeline.threadExecutionWidth;
+    NSUInteger maxThreads = g_pipeline.maxTotalThreadsPerThreadgroup;
+
+    if ([g_device supportsFamily:MTLGPUFamilyApple9]) {
+        g_tg_w = execWidth;
+        g_tg_h = maxThreads / execWidth;
+        if (g_tg_h > 32) g_tg_h = 32;
+        if (g_verbose_once) std::cout << "Metal: Apple GPU family 9 (M4)\n";
+    } else if ([g_device supportsFamily:MTLGPUFamilyApple8]) {
+        g_tg_w = execWidth;
+        g_tg_h = maxThreads / execWidth;
+        if (g_tg_h > 24) g_tg_h = 24;
+        if (g_verbose_once) std::cout << "Metal: Apple GPU family 8 (M3)\n";
+    } else if ([g_device supportsFamily:MTLGPUFamilyApple7]) {
+        g_tg_w = execWidth;
+        g_tg_h = maxThreads / execWidth;
+        if (g_tg_h > 16) g_tg_h = 16;
+        if (g_verbose_once) std::cout << "Metal: Apple GPU family 7 (M2)\n";
     } else if ([g_device supportsFamily:MTLGPUFamilyApple6]) {
-        if (g_verbose_once) std::cout << "Metal: Apple GPU family 6 (M1 Pro/Max or later)\n";
+        g_tg_w = execWidth;
+        g_tg_h = maxThreads / execWidth;
+        if (g_tg_h > 16) g_tg_h = 16;
+        if (g_verbose_once) std::cout << "Metal: Apple GPU family 6 (M1 Pro/Max)\n";
     } else {
+        g_tg_w = execWidth;
+        g_tg_h = maxThreads / execWidth;
+        if (g_tg_h > 16) g_tg_h = 16;
         if (g_verbose_once) std::cout << "Metal: Apple GPU (M1)\n";
     }
 
+    g_verbose_once = false;
     return true;
 }
 
-void nlm_denoise_metal(const Image& src, Image& dst, const NlmParams& params) {
-    if (!init_metal()) {
-        std::cerr << "Metal init failed, falling back to CPU\n";
-        nlm_denoise_cpu_neon(src, dst, params);
-        return;
-    }
-
+static void nlm_metal_kernel_sync(const Image& src, Image& dst, const NlmParams& params) {
     int w = src.width;
     int h = src.height;
     int c = src.channels;
@@ -145,12 +166,6 @@ void nlm_denoise_metal(const Image& src, Image& dst, const NlmParams& params) {
     int half_patch = params.patch_size / 2;
     int half_search = params.search_window / 2;
     float h2_inv = 1.0f / (params.h * params.h);
-
-    if (params.verbose) {
-        std::cout << "NLM Metal GPU: " << w << "x" << h << "x" << c
-                  << " patch=" << params.patch_size << " search=" << params.search_window
-                  << " h=" << params.h << "\n";
-    }
 
     size_t data_size = n * sizeof(float);
 
@@ -170,7 +185,6 @@ void nlm_denoise_metal(const Image& src, Image& dst, const NlmParams& params) {
 
     int sw = w, sh = h, sc = c, shp = half_patch, shs = half_search;
     float fh2 = h2_inv;
-
     [enc setBytes:&sw length:sizeof(int) atIndex:2];
     [enc setBytes:&sh length:sizeof(int) atIndex:3];
     [enc setBytes:&sc length:sizeof(int) atIndex:4];
@@ -179,14 +193,7 @@ void nlm_denoise_metal(const Image& src, Image& dst, const NlmParams& params) {
     [enc setBytes:&fh2 length:sizeof(float) atIndex:7];
 
     MTLSize gridSize = MTLSizeMake(w, h, 1);
-
-    NSUInteger maxThreads = g_pipeline.maxTotalThreadsPerThreadgroup;
-    NSUInteger execWidth = g_pipeline.threadExecutionWidth;
-    NSUInteger tg_w = execWidth;
-    NSUInteger tg_h = maxThreads / execWidth;
-    if (tg_h > 16) tg_h = 16;
-    if (tg_w > 32) tg_w = 32;
-    MTLSize tgSize = MTLSizeMake(tg_w, tg_h, 1);
+    MTLSize tgSize = MTLSizeMake(g_tg_w, g_tg_h, 1);
 
     [enc dispatchThreads:gridSize threadsPerThreadgroup:tgSize];
     [enc endEncoding];
@@ -201,4 +208,20 @@ void nlm_denoise_metal(const Image& src, Image& dst, const NlmParams& params) {
     }
 
     memcpy(dst.data.data(), [dst_buf contents], data_size);
+}
+
+void nlm_denoise_metal(const Image& src, Image& dst, const NlmParams& params) {
+    if (!init_metal()) {
+        nlm_denoise_cpu_neon(src, dst, params);
+        return;
+    }
+
+    if (params.verbose) {
+        std::cout << "NLM Metal GPU: " << src.width << "x" << src.height << "x" << src.channels
+                  << " patch=" << params.patch_size << " search=" << params.search_window
+                  << " h=" << params.h
+                  << " tg=" << g_tg_w << "x" << g_tg_h << "\n";
+    }
+
+    nlm_metal_kernel_sync(src, dst, params);
 }
