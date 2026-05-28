@@ -7,6 +7,7 @@ extern "C" {
 }
 
 #include "nlm_core.h"
+#include "nlm_video_temporal.h"
 
 #include <iostream>
 #include <vector>
@@ -21,6 +22,9 @@ struct VideoConfig {
     float strength = 0.5f;
     int crf = 18;
     bool verbose = false;
+    bool temporal = false;
+    int frame_count = 3;
+    float temporal_weight = 0.8f;
 };
 
 static const char* USAGE = R"(Usage: nlm-video input.mp4 output.mp4 [options]
@@ -32,6 +36,9 @@ Options:
                        medium    - CPU NEON+GCD
                        fast      - multi-resolution
                        veryfast  - wavelet, real-time
+  --temporal         Multi-frame temporal denoising (reduces flicker)
+  --frame-count N     Temporal frames to buffer (default: 3, range: 1-7)
+  --temporal-weight FLOAT  Weight decay per frame offset (default: 0.8)
   --strength FLOAT   Denoising strength 0.0-1.0 (default: 0.5)
                        Maps to NLM filter strength h
   --crf N            Output quality, lower=better, 0-51 (default: 18)
@@ -58,6 +65,12 @@ static bool parse_video_args(int argc, char* argv[], VideoConfig& config) {
             config.crf = std::stoi(argv[++i]);
         } else if (arg == "--verbose") {
             config.verbose = true;
+        } else if (arg == "--temporal") {
+            config.temporal = true;
+        } else if (arg == "--frame-count" && i + 1 < argc) {
+            config.frame_count = std::stoi(argv[++i]);
+        } else if (arg == "--temporal-weight" && i + 1 < argc) {
+            config.temporal_weight = std::stof(argv[++i]);
         } else if (arg == "--help") {
             std::cout << USAGE;
             return false;
@@ -74,6 +87,17 @@ static bool parse_video_args(int argc, char* argv[], VideoConfig& config) {
     if (config.crf < 0 || config.crf > 51) {
         std::cerr << "--crf must be 0-51\n";
         return false;
+    }
+    if (config.frame_count < 1 || config.frame_count > 7) {
+        std::cerr << "--frame-count must be 1-7\n";
+        return false;
+    }
+    if (config.temporal_weight <= 0.0f || config.temporal_weight > 1.0f) {
+        std::cerr << "--temporal-weight must be >0.0 and <=1.0\n";
+        return false;
+    }
+    if (config.frame_count > 1) {
+        config.temporal = true;
     }
     return true;
 }
@@ -117,6 +141,15 @@ int main(int argc, char* argv[]) {
     NlmParams nlm_params;
     nlm_params.verbose = false; // we handle progress ourselves
     NlmPipelineFn nlm_pipeline = resolve_pipeline(config, nlm_params);
+
+    // Temporal denoiser (if enabled)
+    TemporalConfig tconfig;
+    tconfig.frame_count = config.frame_count;
+    tconfig.temporal_weight = config.temporal_weight;
+    TemporalDenoiser* tdenoiser = nullptr;
+    if (config.temporal) {
+        tdenoiser = new TemporalDenoiser(tconfig, nlm_params);
+    }
 
     // --- 1. Open input ---
     AVFormatContext* in_fmt = nullptr;
@@ -323,8 +356,12 @@ int main(int argc, char* argv[]) {
                 }
             }
 
-            // NLM denoise
-            nlm_pipeline(src_img, dst_img, nlm_params);
+            // NLM denoise (temporal or spatial)
+            if (tdenoiser) {
+                dst_img = tdenoiser->denoise(src_img);
+            } else {
+                nlm_pipeline(src_img, dst_img, nlm_params);
+            }
 
             // Convert denoised Image → RGB24 buffer (reuse rgb_frame)
             for (int y = 0; y < height; y++) {
@@ -391,6 +428,7 @@ int main(int argc, char* argv[]) {
     }
 
     // --- Cleanup ---
+    delete tdenoiser;
     av_frame_free(&dec_frame);
     av_frame_free(&rgb_frame);
     av_frame_free(&enc_frame);

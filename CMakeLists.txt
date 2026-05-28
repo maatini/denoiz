@@ -23,6 +23,7 @@ set(NLM_SOURCES
     src/nlm_ensemble.cpp
     src/nlm_coarse_to_fine.cpp
     src/nlm_metal.mm
+    src/nlm_video_temporal.cpp
 )
 
 # ── nlm_denoise ────────────────────────────────────────────────────────
