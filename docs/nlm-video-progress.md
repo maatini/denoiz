@@ -1,30 +1,25 @@
 # nlm-video Progress
 
 ## Slice 1: Frame-by-Frame ✓
-- FFmpeg decode → NLM pipeline → FFmpeg encode (H.264)
-- 5 Presets (veryslow/slow/medium/fast/veryfast) auf bestehende NLM-Pipelines
+- FFmpeg decode → NLM pipeline → encode (H.264)
+- 5 Presets auf bestehende NLM-Pipelines
 - Audio-Stream-Copy
-- PSNR-Tests: Output valide, Denoising-Effekt messbar
 
 ## Slice 2: Temporal Denoising ✓
-- `nlm_video_temporal.h/cpp`: Ringbuffer mit N Frames
-- Patch-basierte Ähnlichkeitsgewichtung am selben Pixel über alle gepufferten Frames
-- `--temporal`, `--frame-count 1-7`, `--temporal-weight 0.0-1.0`
-- PSNR ähnlich wie spatial (24.6 dB), Vorteil liegt in zeitlicher Konsistenz
+- `nlm_video_temporal.h/cpp`: Ringbuffer, Patch-basierte Ähnlichkeitsgewichtung
+- `--temporal`, `--frame-count`, `--temporal-weight`
 
-## Slice 3: Performance-Optimierung ✓ (läuft)
-- Metal-Threadgroup-Tuning pro GPU-Generation (M1–M4) `nlm_metal.mm`
-- GCD-Pipeline-Parallelisierung: NLM asynchron auf Serial-Queue (Doppel-Puffering)
-- `--benchmark`-Flag mit fps, wall time, median NLM-Zeit
-- **Benchmarks (M2, 320×240 RGB, 25fps)**:
-  | Preset    | fps     | NLM median |
-  |-----------|---------|------------|
-  | medium    | 83.4    | 11.0 ms    |
-  | slow      | 83.0    | —          |
-  | fast      | 124.4   | —          |
-  | veryfast  | 125.1   | —          |
-- **640×480 medium**: 20 fps, 44.8 ms median
+## Slice 3: Performance-Optimierung ✓
+- Async NLM auf GCD-Serial-Queue (Decode + NLM parallel)
+- Metal Threadgroup-Tuning pro GPU-Generation (M1–M4)
+- `--benchmark` Flag (fps, wall time, median NLM-Zeit)
 
-## Ausstehend
-- Slice 4: Szenenerkennung, 10-bit/HDR, Progress/ETA, Content-Presets
-- Slice 5: PNG-Export, Filter-Chain, GPU-Fallback, HandBrake-Integration
+## Slice 4: Content-Presets + Codec + ETA ✓
+- 4 Content-Presets: film, grain, lowlight, animation
+- Wählbarer Codec: h264, h265, av1 (über `--codec`)
+- ETA mit fps-Anzeige im Progress (via `--verbose`)
+
+## Slice 5: Sharpen + PNG-Export + GPU-Fallback ✓
+- `--sharpen 0.0-2.0`: Unsharp-Mask nach NLM
+- `--frames-out DIR`: PNG-Frame-Export (kein Video-Encode)
+- `--use-gpu`: Metal-GPU erzwingen
