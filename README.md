@@ -1,5 +1,10 @@
 # nlm_denoise — NLM Denoising for Apple Silicon
 
+[![C++20](https://img.shields.io/badge/C%2B%2B-20-blue)](https://en.cppreference.com/w/cpp/20)
+[![macOS](https://img.shields.io/badge/platform-macOS%20Apple%20Silicon-lightgrey)](https://www.apple.com/mac/)
+[![Metal](https://img.shields.io/badge/GPU-Metal-purple)](https://developer.apple.com/metal/)
+[![Devbox](https://img.shields.io/badge/build-devbox-blue)](https://www.jetify.com/devbox/)
+
 High-performance Non-Local Means (NLM) image denoising CLI, optimized for Apple Silicon (M1–M4). 8 denoising pipelines: Metal GPU, ARM NEON + GCD, Wavelet-domain, Adaptive h, Coarse-to-Fine, and more. Research-backed adaptations from NTIRE 2025 Challenge (SRC-B #1, 31.20 dB).
 
 ![Denoiz](denoiz.png)
