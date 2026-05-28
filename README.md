@@ -27,22 +27,25 @@ devbox run install   # → install/bin/nlm_denoise
 
 ```
 nlm_denoise input.png output.png [options]
-
-Options:
-  --patch-size N      Patch size, odd (default: 7)
-  --search-window N   Search window size, odd (default: 21)
-  --h FLOAT           Filter strength (default: 0.1)
-  --sigma FLOAT       Input noise sigma (not applied, default: 0.0)
-  --use-gpu           Metal GPU acceleration
-  --fast              Multi-resolution (2x downsample)
-  --wavelet           Wavelet-domain NLM (DWT + threshold)
-  --adaptive          Adaptive h (local variance per pixel)
-  --ensemble          Multi-h ensemble (3 members, experimental)
-  --coarse-to-fine    2x downsample → residual refinement
-  --benchmark         Run comparison against naive reference
-  --threads N|auto    Thread count (default: auto)
-  --verbose           Show progress and timing
 ```
+
+### Parameter
+
+| Parameter | Typ | Default | Beschreibung |
+|-----------|-----|---------|-------------|
+| `--patch-size N` | int (ungerade) | 7 | Seitenlänge des Vergleichs-Patches in Pixeln. Der NLM-Algorithmus vergleicht kleine Bildausschnitte (Patches) um jedes Pixel, um ähnliche Regionen zu finden. Ein größerer Patch erfasst mehr Struktur (Texturen, Kanten), kostet aber quadratisch mehr Rechenzeit: O(p²). Wertebereich typisch 3–11. Muss ungerade sein, damit ein klares Zentrumspixel existiert. |
+| `--search-window N` | int (ungerade) | 21 | Radius des Suchfensters in Pixeln. Definiert, wie weit vom aktuellen Pixel nach ähnlichen Patches gesucht wird. Größere Fenster finden mehr Patch-Kandidaten (bessere Rauschentfernung), aber Laufzeit skaliert mit O(sw²). Das gesamte Suchfenster ist (2N+1)×(2N+1) Pixel groß. Typischer Bereich: 7–35. |
+| `--h FLOAT` | float (>0) | 0.1 | Filterstärke (bandwidth parameter). Steuert, wie stark ähnliche Patches gewichtet werden. Pixelgewichte werden als exp(−SSD / h²) berechnet, wobei SSD die Summe der quadrierten Patch-Differenzen ist. Kleines h (0.05): nur sehr ähnliche Patches zählen → schwache Glättung, Details bleiben erhalten. Großes h (0.5): viele Patches zählen → starke Glättung, Rauschen wird effektiv entfernt. Typischer Bereich: 0.05–0.5. |
+| `--sigma FLOAT` | float | 0.0 | Erwartetes Rausch-Sigma des Eingabebildes. **Derzeit reserviert** – das Rauschen wird nicht auf das Bild angewendet. Der Parameter existiert für Pipeline-Kompatibilität und zukünftige adaptive Rauschmodellierung. Bei `--verbose` wird ein Hinweis ausgegeben, wenn sigma > 0 gesetzt ist. |
+| `--use-gpu` | flag | false | Nutzt die Apple GPU (Metal Shading Language) für die NLM-Berechnung. Threadgruppen werden über den gesamten Pixelraum verteilt. Liefert pixelgenau das gleiche Ergebnis wie die NEON-CPU-Pipeline (bit-identisch). Beste Balance aus Geschwindigkeit und Qualität (36× Speedup auf M2 bei 256×256). Hardware-Voraussetzung: Apple Silicon (M1–M4) mit Metal 3. |
+| `--fast` | flag | false | Multi-Resolution-Ansatz: das Eingabebild wird um Faktor 2 herunterskaliert, NLM wird auf dem verkleinerten Bild ausgeführt, dann wird das Ergebnis wieder hochskaliert. Etwa 4× weniger Pixel zu verarbeiten → 60× Speedup. Qualitätseinbuße durch Down-/Upsampling (53 dB vs 71.6 dB auf 256×256). Geeignet für schnelle Vorschau oder Batch-Verarbeitung. |
+| `--wavelet` | flag | false | Wavelet-Domain NLM: 2-stufige Haar-2D-DWT → NLM auf den Wavelet-Koeffizienten → Thresholding (weiche Schwelle) → inverse DWT. Nutzt Apple Accelerate (vDSP) für die DWT. Extrem schnell (1705× auf 256×256, <1 ms), da die DWT die Bildinformation komprimiert und NLM weniger Pixel verarbeiten muss. Geeignet für Echtzeit-Vorschau und Thumbnails. |
+| `--adaptive` | flag | false | Adaptive h: berechnet pro Pixel die lokale Varianz (über ein 3×3-Fenster auf dem Luminanzkanal) und leitet daraus ein per-pixel h ab. In homogenen Regionen (niedrige Varianz) wird ein niedrigeres h verwendet → stärkere Glättung. An Kanten (hohe Varianz) wird ein höheres h verwendet → Detailerhalt. Nutzt Apple Accelerate vDSP für die Varianzberechnung. Beste PSNR aller Pipelines (77.8 dB, +6 dB über NEON). |
+| `--ensemble` | flag | false | Multi-h Ensemble: führt NLM dreimal mit unterschiedlichen h-Werten aus (h, 0.5h, 1.5h) und mittelt die Ergebnisse. **Experimentell** – in der Praxis wurde kein signifikanter Qualitätsgewinn beobachtet. Ansatz stammt aus NTIRE 2025 Model Ensemble (DL-spezifisch, für NLM nicht effektiv). |
+| `--coarse-to-fine` | flag | false | Grob-zu-Fein-Verfeinerung: 4× Downsample → NLM auf grober Auflösung → Residual = Input − Coarse berechnen → NLM auf dem Residual → Output = Coarse + geglättetes Residual. Progressive Refinement-Strategie. 55× Speedup auf 256×256. PSNR niedriger als NEON, aber höher als Fast. NTIRE-Adaption: Progressive Learning. |
+| `--benchmark` | flag | false | Benchmark-Modus: führt zusätzlich die naive CPU-Referenz und die NEON+GCD-Pipeline aus und gibt einen Vergleichsreport aus (Laufzeiten, Speedups vs. Naive und vs. NEON, PSNR der gewählten Pipeline gegen die Naive-Referenz). Erhöht die Gesamtlaufzeit durch die zusätzlichen Durchläufe. |
+| `--threads N\|auto` | int/string | auto | Anzahl der GCD-Threads für CPU-Pipelines. `0` oder `auto` nutzt alle verfügbaren Kerne (via `dispatch_apply`). Bei expliziten Werten wird die Thread-Anzahl begrenzt. Nützlich für Benchmarking oder wenn andere Prozesse geschont werden sollen. Betrifft nur CPU-Pipelines; GPU-Pipeline läuft unabhängig. |
+| `--verbose` | flag | false | Ausführliche Ausgabe: Name der gewählten Pipeline, Bilddimensionen, Parameter (`patch`, `search`, `h`), Fortschrittsanzeige (Zeilenzähler), und Wall-Clock-Laufzeit in Sekunden. Hilfreich für Debugging und Performance-Profiling. |
 
 ### Examples
 
