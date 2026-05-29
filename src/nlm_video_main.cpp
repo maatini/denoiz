@@ -8,6 +8,7 @@ extern "C" {
 
 #include "nlm_core.h"
 #include "nlm_video_temporal.h"
+#include "nlm_video_tuning.h"
 
 #include <iostream>
 #include <iomanip>
@@ -24,9 +25,17 @@ struct VideoConfig {
     bool verbose = false, temporal = false, benchmark = false, deinterlace = false, use_gpu = false;
     int frame_count = 3;
     float temporal_weight = 0.8f;
+    bool find_best_params = false;
+    std::string tuning_start = "00:00:00";
+    double tuning_duration = 20.0;
+    std::string param_grid;
+    std::string metric = "ssim";
+    int top_n = 5;
+    std::string output_dir = "./tuning";
 };
 
 static const char* USAGE = R"(Usage: nlm-video input.mp4 output.mp4 [options]
+       nlm-video input.mp4 --find-best-params [tuning-options]
 
 Options:
   --preset PRESET    Quality/speed tradeoff (default: medium)
@@ -44,13 +53,25 @@ Options:
   --use-gpu          Force Metal GPU pipeline
   --verbose          Show progress with ETA
   --benchmark        Per-frame timing + fps summary
+
+Tuning options (with --find-best-params):
+  --find-best-params Activate parameter tuning mode
+  --start TIME       Start time HH:MM:SS or seconds (default: 00:00:00)
+  --duration SEC     Test segment duration in seconds (default: 20)
+  --param-grid SPEC  Grid specification, e.g.:
+                       "patch-size:5,7,9; h:0.4-1.2 step 0.2; temporal:1,2"
+  --metric METRIC    Quality metric: ssim, psnr, perceptual (default: ssim)
+  --top N            Show top N results (default: 5)
+  --output-dir DIR   Output directory (default: ./tuning)
   --help             Show this message
 )";
 
 static bool parse_video_args(int argc, char* argv[], VideoConfig& c) {
-    if (argc < 3) { std::cerr << USAGE; return false; }
-    c.input_path = argv[1]; c.output_path = argv[2];
-    for (int i = 3; i < argc; ++i) {
+    c.input_path = argv[1];
+    if (argc >= 3 && argv[2][0] != '-') c.output_path = argv[2];
+    int start_i = c.output_path.empty() ? 2 : 3;
+
+    for (int i = start_i; i < argc; ++i) {
         std::string a = argv[i];
         if (a == "--preset" && i+1<argc) c.preset = argv[++i];
         else if (a == "--strength" && i+1<argc) c.strength = std::stof(argv[++i]);
@@ -60,6 +81,13 @@ static bool parse_video_args(int argc, char* argv[], VideoConfig& c) {
         else if (a == "--temporal-weight" && i+1<argc) c.temporal_weight = std::stof(argv[++i]);
         else if (a == "--sharpen" && i+1<argc) c.sharpen = std::stof(argv[++i]);
         else if (a == "--frames-out" && i+1<argc) c.frames_out = argv[++i];
+        else if (a == "--start" && i+1<argc) c.tuning_start = argv[++i];
+        else if (a == "--duration" && i+1<argc) c.tuning_duration = std::stod(argv[++i]);
+        else if (a == "--param-grid" && i+1<argc) c.param_grid = argv[++i];
+        else if (a == "--metric" && i+1<argc) c.metric = argv[++i];
+        else if (a == "--top" && i+1<argc) c.top_n = std::stoi(argv[++i]);
+        else if (a == "--output-dir" && i+1<argc) c.output_dir = argv[++i];
+        else if (a == "--find-best-params") c.find_best_params = true;
         else if (a == "--temporal") c.temporal = true;
         else if (a == "--deinterlace") c.deinterlace = true;
         else if (a == "--use-gpu") c.use_gpu = true;
@@ -68,6 +96,15 @@ static bool parse_video_args(int argc, char* argv[], VideoConfig& c) {
         else if (a == "--help") { std::cout << USAGE; return false; }
         else { std::cerr << "Unknown: " << a << "\n"; return false; }
     }
+
+    if (c.find_best_params) {
+        if (c.param_grid.empty()) { std::cerr << "--param-grid required with --find-best-params\n"; return false; }
+        if (c.tuning_duration <= 0) { std::cerr << "--duration must be > 0\n"; return false; }
+        if (c.top_n < 1) { std::cerr << "--top must be >= 1\n"; return false; }
+        return true;
+    }
+
+    if (c.output_path.empty()) { std::cerr << USAGE; return false; }
     if (c.strength<0||c.strength>1) { std::cerr<<"--strength 0-1\n"; return false; }
     if (c.crf<0||c.crf>51) { std::cerr<<"--crf 0-51\n"; return false; }
     if (c.frame_count<1||c.frame_count>7) { std::cerr<<"--frame-count 1-7\n"; return false; }
@@ -111,7 +148,22 @@ struct PendingState { Image src,dst; bool valid=false; double nlm_ms=0; int64_t 
 
 int main(int argc, char* argv[]) {
     VideoConfig c;
+    if (argc < 2) { std::cerr << USAGE; return 1; }
     if (!parse_video_args(argc, argv, c)) return 1;
+
+    if (c.find_best_params) {
+        TuningConfig tc;
+        tc.input_path = c.input_path;
+        tc.output_dir = c.output_dir;
+        tc.param_grid = c.param_grid;
+        tc.metric = c.metric;
+        tc.start_sec = parse_time(c.tuning_start);
+        tc.duration_sec = c.tuning_duration;
+        tc.top_n = c.top_n;
+        tc.verbose = c.verbose;
+        return run_tuning(tc);
+    }
+
     if (!c.frames_out.empty()) mkdir(c.frames_out.c_str(),0755);
 
     NlmParams np; np.verbose=false;

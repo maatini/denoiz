@@ -4,6 +4,8 @@
 
 `nlm-video` — eine CLI für Videodenoising, die den bestehenden NLM-Algorithmus aus `nlm_denoise` auf Videoframes anwendet. Schnell, qualitativ hochwertig, Apple-Silicon-optimiert.
 
+Zusätzlich: **Parameter-Tuning-Modus** (`--find-best-params`), der kurze Testclips mit verschiedenen Parameter-Kombinationen verarbeitet und die besten Einstellungen automatisch ermittelt.
+
 ---
 
 ## Architekturüberblick
@@ -266,3 +268,157 @@ Slime 5 (Extended)                ← parallel zu 2/3/4 entwickelbar
 3. **Output-Codec wählbar?** → Ja, `--codec h264|h265|av1` via VideoToolbox. Slice 1.
 4. **CRF/Qualitäts-Steuerung beim Encode?** → `--crf N` (default: 18). Slice 1.
 5. **Test-Videos:** Woher bekommen wir reproduzierbare Noisy-Videos? → Eigenes Testset generieren? Oder öffentliche Datasets (Derf's, Xiph)?
+
+---
+
+## Parameter Tuning (--find-best-params)
+
+### Ziel
+
+Der User soll schnell gute NLM-Einstellungen für ein bestimmtes Video finden, ohne das gesamte Video mehrfach zu verarbeiten.
+
+### CLI-Signatur
+
+```
+nlm-video input.mp4 \
+  --find-best-params \
+  --start 00:12:45 \
+  --duration 20 \
+  --param-grid "patch-size:5,7,9; h:0.4-1.2 step 0.2; temporal:1,2,3; prefilter:0,1" \
+  --metric ssim \
+  --output-dir ./tuning-results \
+  --top 5
+```
+
+### Optionen
+
+| Option | Bedeutung | Default |
+|--------|----------|--------|
+| `--find-best-params` | Aktiviert den Tuning-Modus | — |
+| `--start` | Startzeit (HH:MM:SS oder Sekunden) | `00:00:00` |
+| `--duration` | Länge des Testclips in Sekunden | `20` |
+| `--param-grid` | Zu testende Parameter (Grid Search) | — (erforderlich) |
+| `--metric` | Bewertungsmetrik (`ssim`, `psnr`, `perceptual`) | `ssim` |
+| `--top` | Anzahl der besten Ergebnisse anzeigen | `5` |
+| `--output-dir` | Ordner für Ergebnisse und Clips | `./tuning` |
+
+### Param-Grid-Syntax
+
+```
+"param1:val1,val2,val3; param2:min-max step s; param3:val1,val2"
+```
+
+- Einzelwerte: `patch-size:5,7,9`
+- Range: `h:0.4-1.2 step 0.2` → 5 Werte (0.4, 0.6, 0.8, 1.0, 1.2)
+- Alle Parameter werden als Cartesian Product kombiniert
+- Beispiel: `patch-size:5,7,9; h:0.4,0.7; temporal:1,2` → 3×2×2 = 12 Tests
+
+### Wichtige Parameter für Grid Search
+
+| Parameter | Bedeutung | Typische Werte |
+|-----------|----------|---------------|
+| `h` | Filterstärke (Hauptparameter) | 0.05–1.5 |
+| `patch-size` | Patch-Größe (Detailerhalt) | 3, 5, 7, 9 |
+| `search-window` | Suchfenstergröße | 11, 15, 21, 31 |
+| `temporal` | Anzahl temporal benachbarter Frames | 1, 2, 3, 5 |
+| `prefilter` | Vorfiltern aktiviert (0/1) | 0, 1 |
+
+### Metriken
+
+#### SSIM (Structural Similarity Index)
+- Wahrnehmungsnahe Qualitätsmetrik (0..1, höher = besser)
+- Berechnung: Frame-weise SSIM zwischen Original und Denoised
+- FFmpeg-basiert: `ffmpeg -i original -i denoised -lavfi ssim`
+
+#### PSNR (Peak Signal-to-Noise Ratio)
+- Klassische Signalmetrik (dB, höher = besser)
+- Nur relevant wenn Ground-Truth-Referenzclip verfügbar
+- FFmpeg-basiert: `ffmpeg -i original -i denoised -lavfi psnr`
+
+#### Perceptual Metric
+- Edge Preservation Score: Verhältnis Kantenstärke vor/nach Denoising
+- Noise Reduction Score: Varianzreduktion in homogenen Regionen
+- Kombinierter Score = (Edge + NoiseRed) / 2
+
+### Architektur
+
+```
+Input Video
+    ↓
+[FFmpeg] → Test-Segment extrahieren (--start + --duration)
+    ↓
+Parameter-Generator (Grid oder Smart)
+    ↓
+┌──────────────────────────────┐
+│   Parallel Worker Pool       │
+│   (Metal + NEON beschleunigt)│
+│   - Worker 1: Param-Set A    │
+│   - Worker 2: Param-Set B    │
+│   - Worker 3: Param-Set C    │
+└──────────────────────────────┘
+    ↓
+Metrik-Berechnung (SSIM etc.)
+    ↓
+Ranking + Top-Ergebnisse
+    ↓
+Ausgabe:
+  - best-params.json
+  - Top-5 Denoised Clips
+  - Vergleichs-Video (optional)
+```
+
+### Output-Struktur
+
+```
+output-dir/
+├── test-segment.mp4          # extrahierter Original-Clip
+├── best-params.json           # Top-N Parameter-Sets + Scores
+├── result_001.mp4             # Denoised Clip #1
+├── result_002.mp4             # Denoised Clip #2
+├── ...
+├── result_NNN.mp4
+├── comparison.mp4             # Side-by-Side Top-3 (optional)
+└── preset_nlm-video.json      # Bestes Parameter-Set als Preset (optional)
+```
+
+### Umsetzungsslices
+
+#### Tuning-Slice 1: Testclip + Basis-NLM
+- `--start` und `--duration` implementieren
+- FFmpeg-Segment-Extraktion (ohne Re-Encoding)
+- Bestehende NLM-Pipeline auf Clip-Frames anwenden
+- CLI-Grundstruktur für `--find-best-params`
+
+#### Tuning-Slice 2: Parameter-Grid-Search
+- `--param-grid` Parser (Einzelwerte + Range-Syntax)
+- Cartesian-Product-Generator
+- Alle Kombinationen nacheinander ausführen
+- Ergebnisse als JSON speichern
+
+#### Tuning-Slice 3: Bewertung & Ranking
+- SSIM/PSNR via FFmpeg-Lavfi implementieren
+- Perceptual Metric (Edge + Noise Score)
+- Ranking nach gewählter Metrik
+- Top-5 Ausgabe mit Parametern + Scores
+
+#### Tuning-Slice 4: Performance & Parallelisierung
+- GCD Concurrent Queue für parallele Testläufe
+- Metal/NEON-Lastverteilung
+- Fortschrittsanzeige mit ETA
+
+#### Tuning-Slice 5: Smart Tuning & Presets
+- Bayesian Optimization / Hill-Climbing statt Grid
+- Rauscherkennung (Film Grain vs. Digital Noise)
+- Preset speichern/laden (`--save-preset`, `--preset`)
+- HandBrake-Vergleich (`--compare-with-handbrake`)
+
+### Abhängigkeiten
+
+```
+Slice 1 (Frame-by-Frame) ← Basis für alle Video-Operationen
+    └── Tuning-Slice 1 (Testclip + NLM) ← baut auf Slice 1 auf
+             └── Tuning-Slice 2 (Grid Search) ← baut auf Tuning-Slice 1
+                      ├── Tuning-Slice 3 (Bewertung & Ranking) ← parallel zu 2
+                      └── Tuning-Slice 4 (Parallelisierung) ← baut auf 2+3
+Tuning-Slice 5 (Smart Tuning) ← baut auf Tuning-Slice 2+3+4
+```

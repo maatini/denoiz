@@ -183,3 +183,80 @@ Jeder Slice ist vollständig lauffähig, getestet auf Apple Silicon (Devbox), mi
 | 9 | Progressive Learning | SRC-B (#1) | Coarse-to-Fine Pipeline |
 
 Nicht adaptiert (DL-spezifisch): Hybrid Transformer+CNN, Data Selection, Model Ensemble (multi-model).
+
+---
+
+### Phase 10 — nlm-video Parameter Tuning (--find-best-params)
+
+**Ziel:** Schnell optimale NLM-Parameter für ein bestimmtes Video finden, ohne das gesamte Video mehrfach zu verarbeiten.
+
+**CLI:**
+```
+nlm-video input.mp4 \
+  --find-best-params \
+  --start 00:12:45 \
+  --duration 20 \
+  --param-grid "patch-size:5,7,9; h:0.4-1.2 step 0.2; temporal:1,2,3; prefilter:0,1" \
+  --metric ssim \
+  --output-dir ./tuning-results \
+  --top 5
+```
+
+---
+
+#### Slice 10.1 — Testclip extrahieren + bestehenden NLM anwenden
+
+**Ziel:** Kurzen Ausschnitt mit FFmpeg extrahieren und NLM darauf laufen lassen.
+
+- [ ] `--start` (HH:MM:SS oder Sekunden) und `--duration` (Sekunden, default 20)
+- [ ] FFmpeg-Segment-Extraktion ohne Re-Encoding (`-c copy`)
+- [ ] Segment als Frame-Sequenz decodieren → bestehende NLM-Pipeline aufrufen
+- [ ] Denoiste Frames speichern (Zwischenergebnis)
+
+---
+
+#### Slice 10.2 — Parameter-Grid-Search (einfach)
+
+**Ziel:** Alle Parameter-Kombinationen systematisch testen.
+
+- [ ] `--param-grid` Parser: `"param:val1,val2; param2:min-max step s"`
+- [ ] Alle Kombinationen generieren (Cartesian Product)
+- [ ] Jede Kombination auf dem Testclip ausführen
+- [ ] Ergebnisse als JSON speichern (params + Metriken + Clip-Pfad)
+- [ ] Denoiste Clips als `result_001.mp4` etc. ablegen
+
+---
+
+#### Slice 10.3 — Bewertung & Ranking
+
+**Ziel:** Automatische Qualitätsbewertung und Bestenliste.
+
+- [ ] SSIM-Metrik (Structural Similarity) via FFmpeg oder eigene Implementierung
+- [ ] PSNR-Metrik (falls Referenzclip vorhanden)
+- [ ] Perceptual Metric (Edge Preservation + Noise Reduction Score)
+- [ ] Ranking nach gewählter Metrik (`--metric ssim|psnr|perceptual`)
+- [ ] `--top N`: Ausgabe der N besten Parameter-Sets
+- [ ] Optional: Side-by-Side-Vergleichsvideo der Top 3
+
+---
+
+#### Slice 10.4 — Performance & Parallelisierung
+
+**Ziel:** Mehrere Parametersätze parallel verarbeiten (Metal + NEON).
+
+- [ ] GCD Concurrent Queue für parallele NLM-Testläufe
+- [ ] GPU/CPU-Last verteilen: Metal-Tests + NEON-Tests parallel
+- [ ] Fortschrittsanzeige mit ETA (X/Y getestet, geschätzte Restzeit)
+- [ ] Ziel: 10–20 Tests in <3 Minuten auf M2/M3
+
+---
+
+#### Slice 10.5 — Erweiterte Features (Smart Tuning)
+
+**Ziel:** Intelligente Suche und Preset-Management.
+
+- [ ] Smart Search statt Grid (Bayesian Optimization / Hill-Climbing)
+- [ ] Automatische Rauscherkennung (Film Grain vs. Digital Noise) → Preset-Vorschlag
+- [ ] `--save-preset FILE`: Beste Parameter als Preset-Datei speichern
+- [ ] `--preset FILE`: Gespeichertes Preset laden
+- [ ] `--compare-with-handbrake`: Automatischer Vergleich mit HandBrake NLMeans

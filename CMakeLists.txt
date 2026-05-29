@@ -23,7 +23,11 @@ set(NLM_SOURCES
     src/nlm_ensemble.cpp
     src/nlm_coarse_to_fine.cpp
     src/nlm_metal.mm
+)
+
+set(NLM_VIDEO_SOURCES
     src/nlm_video_temporal.cpp
+    src/nlm_video_tuning.cpp
 )
 
 # ── nlm_denoise ────────────────────────────────────────────────────────
@@ -39,7 +43,7 @@ target_link_libraries(nlm_denoise PRIVATE
 )
 
 # ── nlm-video ──────────────────────────────────────────────────────────
-add_executable(nlm-video src/nlm_video_main.cpp ${NLM_SOURCES})
+add_executable(nlm-video src/nlm_video_main.cpp ${NLM_SOURCES} ${NLM_VIDEO_SOURCES})
 
 target_include_directories(nlm-video PRIVATE
     src
