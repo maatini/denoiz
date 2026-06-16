@@ -25,6 +25,11 @@ struct VideoConfig {
     bool verbose = false, temporal = false, benchmark = false, deinterlace = false, use_gpu = false;
     int frame_count = 3;
     float temporal_weight = 0.8f;
+    bool motion_compensated = false;
+    int block_size = 8;
+    int search_radius = 16;
+    int lookahead = 0;
+    float scene_threshold = 0.15f;
     bool find_best_params = false;
     std::string tuning_start = "00:00:00";
     double tuning_duration = 20.0;
@@ -47,6 +52,11 @@ Options:
   --temporal         Multi-frame temporal denoising
   --frame-count N    Temporal frames to buffer (default: 3, 1-7)
   --temporal-weight FLOAT  Weight decay per frame offset (default: 0.8)
+  --mc               Motion-compensated temporal denoising (implies --temporal)
+  --block-size N     Motion estimation block size 4-16 (default: 8)
+  --search-radius N  Coarse search radius in blocks (default: 16)
+  --lookahead N      Future frames buffer 0-3 (default: 0, adds latency)
+  --scene-threshold FLOAT  Scene cut sensitivity (default: 0.15)
   --sharpen FLOAT    Unsharp mask 0.0-2.0 (default: 0.0=off)
   --frames-out DIR   Save denoised frames as PNG sequence
   --deinterlace      Enable YADIF deinterlacing on input
@@ -89,6 +99,11 @@ static bool parse_video_args(int argc, char* argv[], VideoConfig& c) {
         else if (a == "--output-dir" && i+1<argc) c.output_dir = argv[++i];
         else if (a == "--find-best-params") c.find_best_params = true;
         else if (a == "--temporal") c.temporal = true;
+        else if (a == "--mc") { c.motion_compensated = true; c.temporal = true; }
+        else if (a == "--block-size" && i+1<argc) c.block_size = std::stoi(argv[++i]);
+        else if (a == "--search-radius" && i+1<argc) c.search_radius = std::stoi(argv[++i]);
+        else if (a == "--lookahead" && i+1<argc) c.lookahead = std::stoi(argv[++i]);
+        else if (a == "--scene-threshold" && i+1<argc) c.scene_threshold = std::stof(argv[++i]);
         else if (a == "--deinterlace") c.deinterlace = true;
         else if (a == "--use-gpu") c.use_gpu = true;
         else if (a == "--verbose") c.verbose = true;
@@ -172,7 +187,17 @@ int main(int argc, char* argv[]) {
 
     TemporalDenoiser* td=nullptr;
     if (c.temporal) {
-        TemporalConfig tc; tc.frame_count=c.frame_count; tc.temporal_weight=c.temporal_weight;
+        TemporalConfig tc;
+        tc.frame_count = c.frame_count;
+        tc.temporal_weight = c.temporal_weight;
+        tc.motion_compensated = c.motion_compensated;
+        tc.motion_compensated = c.motion_compensated;
+        if (c.motion_compensated) {
+            tc.motion.block_size = c.block_size;
+            tc.motion.coarse_search_radius = c.search_radius;
+            tc.lookahead = c.lookahead;
+            tc.scene_detect.mad_threshold = c.scene_threshold;
+        }
         td = new TemporalDenoiser(tc, np);
     }
 
@@ -299,8 +324,14 @@ int main(int argc, char* argv[]) {
             dispatch_async(nlmq,^{ auto t0=std::chrono::high_resolution_clock::now(); Image r;
                 if (td) r=td->denoise(p->src); else pipeline(p->src,r,np);
                 auto t1=std::chrono::high_resolution_clock::now();
-                p->nlm_ms=std::chrono::duration<double,std::milli>(t1-t0).count();
-                p->dst=r; dispatch_semaphore_signal(slot); dispatch_semaphore_signal(ready); });
+                if (r.width == 0) {
+                    // Lookahead buffer not yet full — skip this frame.
+                    p->valid = false;
+                } else {
+                    p->nlm_ms=std::chrono::duration<double,std::milli>(t1-t0).count();
+                    p->dst=r;
+                }
+                dispatch_semaphore_signal(slot); dispatch_semaphore_signal(ready); });
             fn++;
             if (c.verbose) { auto tn=std::chrono::high_resolution_clock::now();
                 double el=std::chrono::duration<double>(tn-w0).count(),fps=fn/el;
@@ -310,6 +341,39 @@ int main(int argc, char* argv[]) {
             av_frame_unref(df); }
     }
     consume();
+    // Flush remaining frames from lookahead buffer (motion-compensated mode).
+    if (td) {
+        while (true) {
+            Image flushed = td->flush();
+            if (flushed.width == 0) break;
+            fn++;
+            apply_sharpen(flushed, c.sharpen);
+            if (!c.frames_out.empty()) {
+                char buf[1024];
+                snprintf(buf, sizeof(buf), "%s/frame_%06lld.png", c.frames_out.c_str(), (long long)fn);
+                save_image(buf, flushed);
+            } else {
+                for (int y = 0; y < H; y++) {
+                    uint8_t* r = rf->data[0] + y * rf->linesize[0];
+                    for (int x = 0; x < W; x++) {
+                        float v;
+                        v = flushed.at(x, y, 0); v = v < 0 ? 0 : v > 1 ? 1 : v; r[x*3] = (uint8_t)(v*255+0.5f);
+                        v = flushed.at(x, y, 1); v = v < 0 ? 0 : v > 1 ? 1 : v; r[x*3+1] = (uint8_t)(v*255+0.5f);
+                        v = flushed.at(x, y, 2); v = v < 0 ? 0 : v > 1 ? 1 : v; r[x*3+2] = (uint8_t)(v*255+0.5f);
+                    }
+                }
+                sws_scale(from_rgb, rf->data, rf->linesize, 0, H, ef->data, ef->linesize);
+                ef->pts = AV_NOPTS_VALUE;
+                if (avcodec_send_frame(ectx, ef) < 0) std::cerr << "Error: send frame\n";
+                while (avcodec_receive_packet(ectx, op) == 0) {
+                    op->stream_index = ovs->index;
+                    av_packet_rescale_ts(op, ectx->time_base, ovs->time_base);
+                    av_interleaved_write_frame(ofmt, op);
+                    av_packet_unref(op);
+                }
+            }
+        }
+    }
     if (ofmt) { avcodec_send_frame(ectx,nullptr);
         while (avcodec_receive_packet(ectx,op)==0) { op->stream_index=ovs->index;
             av_packet_rescale_ts(op,ectx->time_base,ovs->time_base); av_interleaved_write_frame(ofmt,op); av_packet_unref(op); }

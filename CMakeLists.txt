@@ -29,6 +29,8 @@ set(NLM_SOURCES
 set(NLM_VIDEO_SOURCES
     src/nlm_video_temporal.cpp
     src/nlm_video_tuning.cpp
+    src/nlm_video_motion.cpp
+    src/nlm_video_scene.cpp
 )
 
 # ── denoise ────────────────────────────────────────────────────────────
