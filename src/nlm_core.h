@@ -4,6 +4,8 @@
 #include <vector>
 #include <string>
 
+struct ImageTuningConfig;
+
 struct Image {
     int width = 0;
     int height = 0;
@@ -42,7 +44,7 @@ struct NlmParams {
 
 Image load_image(const std::string& path);
 bool save_image(const std::string& path, const Image& img);
-bool parse_args(int argc, char* argv[], NlmParams& params, std::string& input, std::string& output);
+bool parse_args(int argc, char* argv[], NlmParams& params, std::string& input, std::string& output, ImageTuningConfig* tuning = nullptr);
 void nlm_denoise_cpu(const Image& src, Image& dst, const NlmParams& params);
 void nlm_denoise_cpu_neon(const Image& src, Image& dst, const NlmParams& params);
 void nlm_denoise_cpu_neon_fast(const Image& src, Image& dst, const NlmParams& params);

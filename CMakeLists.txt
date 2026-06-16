@@ -32,16 +32,22 @@ set(NLM_VIDEO_SOURCES
 )
 
 # ── denoise ────────────────────────────────────────────────────────────
-add_executable(denoise src/nlm_main.cpp ${NLM_SOURCES})
+add_executable(denoise src/nlm_main.cpp src/nlm_image_tuning.cpp ${NLM_SOURCES})
 
-target_include_directories(denoise PRIVATE src)
+target_include_directories(denoise PRIVATE
+    src
+    ${LIBVMAF_INCLUDE_DIRS}
+)
 
 target_link_libraries(denoise PRIVATE
+    ${LIBVMAF_LIBRARIES}
     "-framework Foundation"
     "-framework Metal"
     "-framework CoreGraphics"
     "-framework Accelerate"
 )
+
+target_link_options(denoise PRIVATE ${LIBVMAF_LDFLAGS})
 
 # ── v-denoise ──────────────────────────────────────────────────────────
 add_executable(v-denoise src/nlm_video_main.cpp ${NLM_SOURCES} ${NLM_VIDEO_SOURCES})

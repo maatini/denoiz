@@ -1,11 +1,5 @@
-#include "nlm_video_tuning.h"
+#include "nlm_image_tuning.h"
 
-extern "C" {
-#include <libavcodec/avcodec.h>
-#include <libavformat/avformat.h>
-#include <libswscale/swscale.h>
-#include <libavutil/imgutils.h>
-}
 extern "C" {
 #include <libvmaf/libvmaf.h>
 }
@@ -17,10 +11,10 @@ extern "C" {
 #include <algorithm>
 #include <chrono>
 #include <fstream>
-#include <ctime>
-#include <cstdlib>
 #include <sys/stat.h>
 #include <dispatch/dispatch.h>
+
+// ── String split helper ────────────────────────────────────────────────
 
 static std::vector<std::string> split(const std::string& s, char delim) {
     std::vector<std::string> out;
@@ -32,6 +26,8 @@ static std::vector<std::string> split(const std::string& s, char delim) {
     }
     return out;
 }
+
+// ── Grid parsing (same syntax as video tuning) ────────────────────────
 
 std::vector<ParamAxis> parse_param_grid(const std::string& spec) {
     std::vector<ParamAxis> axes;
@@ -85,15 +81,15 @@ void apply_param_set(const std::map<std::string, double>& ps, NlmParams& p) {
         else if (kv.first == "h") p.h = (float)kv.second;
         else if (kv.first == "sigma") p.sigma = (float)kv.second;
         else if (kv.first == "fast_mode" || kv.first == "prefilter") p.fast_mode = (kv.second > 0.5);
+        else if (kv.first == "adaptive_mode") p.adaptive_mode = (kv.second > 0.5);
+        else if (kv.first == "wavelet_mode") p.wavelet_mode = (kv.second > 0.5);
+        else if (kv.first == "use_gpu") p.use_gpu = (kv.second > 0.5);
+        else if (kv.first == "ensemble_mode") p.ensemble_mode = (kv.second > 0.5);
+        else if (kv.first == "coarse_to_fine_mode") p.coarse_to_fine_mode = (kv.second > 0.5);
     }
 }
 
-double parse_time(const std::string& s) {
-    auto cols = split(s, ':');
-    if (cols.size() == 3) return std::stod(cols[0]) * 3600.0 + std::stod(cols[1]) * 60.0 + std::stod(cols[2]);
-    if (cols.size() == 2) return std::stod(cols[0]) * 60.0 + std::stod(cols[1]);
-    return std::stod(s);
-}
+// ── Quality Metrics ────────────────────────────────────────────────────
 
 double compute_ssim(const Image& a, const Image& b) {
     if (a.width != b.width || a.height != b.height || a.channels != b.channels) return 0.0;
@@ -176,7 +172,10 @@ double compute_vmaf(const Image& a, const Image& b) {
     cfg.n_subsample = 1;
 
     VmafContext* vmaf = nullptr;
-    if (vmaf_init(&vmaf, cfg) != 0) return 0.0;
+    if (vmaf_init(&vmaf, cfg) != 0) {
+        std::cerr << "  VMAF: vmaf_init failed\n";
+        return 0.0;
+    }
 
     // ── Load model (try version-based auto-search first, then explicit paths) ─
     VmafModel* model = nullptr;
@@ -196,14 +195,20 @@ double compute_vmaf(const Image& a, const Image& b) {
             FILE* f = fopen(model_paths[i], "r");
             if (f) { found_path = model_paths[i]; fclose(f); break; }
         }
-        if (!found_path) { vmaf_close(vmaf); return 0.0; }
+        if (!found_path) {
+            std::cerr << "  VMAF: model not found\n";
+            vmaf_close(vmaf);
+            return 0.0;
+        }
         load_ret = vmaf_model_load_from_path(&model, &mcfg, found_path);
     }
     if (load_ret != 0) {
+        std::cerr << "  VMAF: model load failed\n";
         vmaf_close(vmaf);
         return 0.0;
     }
     if (vmaf_use_features_from_model(vmaf, model) != 0) {
+        std::cerr << "  VMAF: use_features_from_model failed\n";
         vmaf_model_destroy(model);
         vmaf_close(vmaf);
         return 0.0;
@@ -213,6 +218,7 @@ double compute_vmaf(const Image& a, const Image& b) {
     VmafPicture ref_pic = {}, dist_pic = {};
     if (vmaf_picture_alloc(&ref_pic, VMAF_PIX_FMT_YUV420P, 8, W, H) != 0 ||
         vmaf_picture_alloc(&dist_pic, VMAF_PIX_FMT_YUV420P, 8, W, H) != 0) {
+        std::cerr << "  VMAF: picture_alloc failed\n";
         vmaf_picture_unref(&ref_pic);
         vmaf_picture_unref(&dist_pic);
         vmaf_model_destroy(model);
@@ -282,151 +288,60 @@ double compute_vmaf(const Image& a, const Image& b) {
     return score;
 }
 
-// ── Segment Extraction (via ffmpeg CLI) ────────────────────────────────
-
-struct SegmentFrames {
-    std::vector<Image> frames;
-    int width = 0, height = 0;
-    double fps = 30.0;
-};
-
-static bool decode_simple_mp4(const std::string& path, SegmentFrames& result, bool verbose) {
-    AVFormatContext* fmt = nullptr;
-    if (avformat_open_input(&fmt, path.c_str(), nullptr, nullptr) < 0)
-        { std::cerr << "Tuning: cannot open " << path << "\n"; return false; }
-    if (avformat_find_stream_info(fmt, nullptr) < 0)
-        { std::cerr << "Tuning: stream info failed\n"; avformat_close_input(&fmt); return false; }
-
-    int vidx = -1;
-    for (unsigned i = 0; i < fmt->nb_streams; i++)
-        if (fmt->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) { vidx = (int)i; break; }
-    if (vidx < 0) { std::cerr << "Tuning: no video\n"; avformat_close_input(&fmt); return false; }
-
-    AVStream* vs = fmt->streams[vidx];
-    result.fps = av_q2d(vs->avg_frame_rate);
-    if (result.fps <= 0) result.fps = 30.0;
-
-    const AVCodec* dec = avcodec_find_decoder(vs->codecpar->codec_id);
-    AVCodecContext* dctx = avcodec_alloc_context3(dec);
-    avcodec_parameters_to_context(dctx, vs->codecpar);
-    avcodec_open2(dctx, dec, nullptr);
-
-    int W = dctx->width, H = dctx->height;
-    result.width = W; result.height = H;
-
-    SwsContext* to_rgb = sws_getContext(W, H, dctx->pix_fmt, W, H, AV_PIX_FMT_RGB24,
-                                         SWS_BILINEAR, nullptr, nullptr, nullptr);
-    AVFrame* df = av_frame_alloc();
-    AVFrame* rf = av_frame_alloc();
-    rf->format = AV_PIX_FMT_RGB24; rf->width = W; rf->height = H;
-    av_frame_get_buffer(rf, 0);
-    AVPacket* pkt = av_packet_alloc();
-
-    while (av_read_frame(fmt, pkt) >= 0) {
-        if (pkt->stream_index != vidx) { av_packet_unref(pkt); continue; }
-        avcodec_send_packet(dctx, pkt);
-        av_packet_unref(pkt);
-        while (avcodec_receive_frame(dctx, df) == 0) {
-            sws_scale(to_rgb, df->data, df->linesize, 0, H, rf->data, rf->linesize);
-            Image cur; cur.width = W; cur.height = H; cur.channels = 3;
-            cur.data.resize((size_t)W * H * 3);
-            for (int y = 0; y < H; y++) {
-                const uint8_t* r = rf->data[0] + y * rf->linesize[0];
-                for (int x = 0; x < W; x++) {
-                    int o = (y * W + x) * 3;
-                    cur.data[o] = r[x*3]/255.0f;
-                    cur.data[o+1] = r[x*3+1]/255.0f;
-                    cur.data[o+2] = r[x*3+2]/255.0f;
-                }
-            }
-            result.frames.push_back(std::move(cur));
-            av_frame_unref(df);
-        }
-    }
-
-    av_frame_free(&df); av_frame_free(&rf); av_packet_free(&pkt);
-    sws_freeContext(to_rgb); avcodec_free_context(&dctx); avformat_close_input(&fmt);
-    if (verbose) std::cout << "Decoded " << result.frames.size() << " frames\n";
-    return !result.frames.empty();
-}
-
-static bool extract_segment(const std::string& path, double start_sec, double duration_sec,
-                             SegmentFrames& result, bool verbose) {
-    char tmpname[1024];
-    snprintf(tmpname, sizeof(tmpname), "/tmp/nlm_tuning_segment_%d.mp4", (int)time(nullptr));
-
-    {
-        char cmd[2048];
-        snprintf(cmd, sizeof(cmd),
-            "ffmpeg -y -ss %.3f -t %.3f -i \"%s\" -c copy -an -loglevel error \"%s\"",
-            start_sec, duration_sec, path.c_str(), tmpname);
-        int ret = system(cmd);
-        if (ret != 0) {
-            std::cerr << "Tuning: ffmpeg segment extraction failed\n";
-            return false;
-        }
-    }
-
-    bool ok = decode_simple_mp4(tmpname, result, verbose);
-    unlink(tmpname);
-
-    if (verbose && ok)
-        std::cout << "Extracted " << result.frames.size() << " frames ("
-                  << result.width << "x" << result.height << ")\n";
-    return ok;
-}
-
 // ── Single Param-Set Evaluation ────────────────────────────────────────
 
 static TuningResult evaluate_param_set(
     const std::map<std::string, double>& param_set,
-    const SegmentFrames& segment, const std::string& metric_name,
-    int test_idx, const std::string& /*output_dir*/)
+    const Image& src, const Image& ref,
+    const std::string& metric_name,
+    int test_idx)
 {
-    NlmParams np; np.h = 0.3f;
+    NlmParams np;
+    np.h = 0.3f;
     apply_param_set(param_set, np);
+
+    // Ensure odd sizes
+    if (np.patch_size % 2 == 0) np.patch_size++;
+    if (np.search_window % 2 == 0) np.search_window++;
 
     TuningResult result;
     result.params = param_set;
 
     auto t0 = std::chrono::high_resolution_clock::now();
 
-    double ssim_total = 0, psnr_total = 0, perc_total = 0, vmaf_total = 0;
+    // Select pipeline (same priority as nlm_main.cpp)
+    void (*nlm_fn)(const Image&, Image&, const NlmParams&) = nlm_denoise_cpu_neon;
+    if (np.adaptive_mode) nlm_fn = nlm_denoise_adaptive;
+    else if (np.wavelet_mode) nlm_fn = nlm_denoise_wavelet;
+    else if (np.use_gpu) nlm_fn = nlm_denoise_metal;
+    else if (np.ensemble_mode) nlm_fn = nlm_denoise_ensemble;
+    else if (np.coarse_to_fine_mode) nlm_fn = nlm_denoise_coarse_to_fine;
+    else if (np.fast_mode) nlm_fn = nlm_denoise_cpu_neon_fast;
 
-    for (size_t i = 0; i < segment.frames.size(); i++) {
-        Image dst;
-        void (*nlm_fn)(const Image&, Image&, const NlmParams&) = nlm_denoise_cpu_neon;
-        if (np.adaptive_mode) nlm_fn = nlm_denoise_adaptive;
-        else if (np.wavelet_mode) nlm_fn = nlm_denoise_wavelet;
-        else if (np.use_gpu) nlm_fn = nlm_denoise_metal;
-        else if (np.fast_mode) nlm_fn = nlm_denoise_cpu_neon_fast;
-        nlm_fn(segment.frames[i], dst, np);
-
-        ssim_total += compute_ssim(segment.frames[i], dst);
-        psnr_total += ::psnr(segment.frames[i], dst);
-        perc_total += compute_perceptual(segment.frames[i], dst);
-        vmaf_total += compute_vmaf(segment.frames[i], dst);
-    }
+    Image dst;
+    nlm_fn(src, dst, np);
 
     auto t1 = std::chrono::high_resolution_clock::now();
     double elapsed = std::chrono::duration<double>(t1 - t0).count();
 
-    size_t nf = segment.frames.size();
-    result.ssim_val = nf > 0 ? ssim_total / nf : 0;
-    result.psnr_val = nf > 0 ? psnr_total / nf : 0;
-    result.perceptual_val = nf > 0 ? perc_total / nf : 0;
-    result.vmaf_val = nf > 0 ? vmaf_total / nf : 0;
-    result.vmaf_val = nf > 0 ? vmaf_total / nf : 0;
+    // Use clean reference if provided, otherwise compare against noisy original
+    const Image& ref_img = ref.data.empty() ? src : ref;
+
+    result.ssim_val = compute_ssim(ref_img, dst);
+    result.psnr_val = ::psnr(ref_img, dst);
+    result.perceptual_val = compute_perceptual(ref_img, dst);
+
+    // VMAF requires 3-channel, even-dimension images
+    if (src.channels == 3 && src.width % 2 == 0 && src.height % 2 == 0)
+        result.vmaf_val = compute_vmaf(ref_img, dst);
+    else
+        result.vmaf_val = 0.0;
 
     if (metric_name == "ssim") result.score = result.ssim_val;
     else if (metric_name == "psnr") result.score = result.psnr_val;
     else if (metric_name == "perceptual") result.score = result.perceptual_val;
     else if (metric_name == "vmaf") result.score = result.vmaf_val;
     else result.score = result.perceptual_val;
-
-    char buf[1024];
-    snprintf(buf, sizeof(buf), "%03d", test_idx);
-    result.clip_path = buf;
 
     std::ostringstream ss;
     ss << "  [" << std::setw(3) << test_idx << "] ";
@@ -438,16 +353,16 @@ static TuningResult evaluate_param_set(
     return result;
 }
 
-// ── JSON ────────────────────────────────────────────────────────────────
+// ── JSON Output ─────────────────────────────────────────────────────────
 
 static void write_results_json(const std::string& path,
                                const std::vector<TuningResult>& results,
-                               const TuningConfig& config) {
+                               const ImageTuningConfig& config,
+                               bool has_reference) {
     std::ofstream f(path);
     f << "{\n  \"config\": {\n"
       << "    \"input\": \"" << config.input_path << "\",\n"
-      << "    \"start\": " << config.start_sec << ",\n"
-      << "    \"duration\": " << config.duration_sec << ",\n"
+      << "    \"reference\": \"" << (has_reference ? config.reference_path : "(none — compared against input)") << "\",\n"
       << "    \"metric\": \"" << config.metric << "\",\n"
       << "    \"grid\": \"" << config.param_grid << "\",\n"
       << "    \"top_n\": " << config.top_n << "\n"
@@ -461,7 +376,6 @@ static void write_results_json(const std::string& path,
           << "      \"psnr\": " << r.psnr_val << ",\n"
           << "      \"perceptual\": " << r.perceptual_val << ",\n"
           << "      \"vmaf\": " << r.vmaf_val << ",\n"
-          << "      \"vmaf\": " << r.vmaf_val << ",\n"
           << "      \"params\": {";
         bool first = true;
         for (const auto& kv : r.params) {
@@ -474,26 +388,36 @@ static void write_results_json(const std::string& path,
     f << "  ]\n}\n";
 }
 
-// ── Main ────────────────────────────────────────────────────────────────
+// ── Main Tuning Entry Point ─────────────────────────────────────────────
 
-int run_tuning(const TuningConfig& config) {
+int run_image_tuning(const Image& src, const Image& ref, const ImageTuningConfig& config) {
     mkdir(config.output_dir.c_str(), 0755);
     auto t_start = std::chrono::high_resolution_clock::now();
 
-    std::cout << "\n=== Phase 1: Extract test segment ===\n";
-    SegmentFrames segment;
-    if (!extract_segment(config.input_path, config.start_sec, config.duration_sec,
-                         segment, config.verbose)) {
-        std::cerr << "Tuning: failed to extract segment\n";
-        return 1;
-    }
-    if (segment.frames.empty()) {
-        std::cerr << "Tuning: no frames extracted\n";
-        return 1;
-    }
-    std::cout << "Extracted " << segment.frames.size() << " frames ("
-              << segment.width << "x" << segment.height << ")\n";
+    bool has_reference = !ref.data.empty();
+    const Image& ref_img = has_reference ? ref : src;
 
+    // ── Phase 1: Image info ─────────────────────────────────────────────
+    std::cout << "\n=== Phase 1: Input Image ===\n"
+              << "Input:  " << config.input_path << " (" << src.width << "x" << src.height
+              << ", " << src.channels << " channels)\n";
+    if (has_reference) {
+        std::cout << "Ref:    " << config.reference_path << " (" << ref.width << "x" << ref.height
+                  << ", " << ref.channels << " channels)\n";
+    } else {
+        std::cout << "Ref:    (none — comparing against noisy input)\n";
+    }
+
+    if (config.metric == "vmaf" && src.channels != 3) {
+        std::cerr << "Warning: VMAF requires 3-channel RGB images (got " << src.channels
+                  << " channels). VMAF scores will be 0.\n";
+    }
+    if (config.metric == "vmaf" && (src.width % 2 != 0 || src.height % 2 != 0)) {
+        std::cerr << "Warning: VMAF requires even dimensions (got " << src.width << "x"
+                  << src.height << "). VMAF scores will be 0.\n";
+    }
+
+    // ── Phase 2: Generate parameter grid ─────────────────────────────────
     std::cout << "\n=== Phase 2: Generate parameter grid ===\n";
     auto axes = parse_param_grid(config.param_grid);
     auto grid = generate_grid(axes);
@@ -503,13 +427,14 @@ int run_tuning(const TuningConfig& config) {
     std::cout << "--> " << grid.size() << " combinations\n";
     if (grid.empty()) { std::cerr << "No parameter combinations generated\n"; return 1; }
 
+    // ── Phase 3: Evaluate ────────────────────────────────────────────────
     std::cout << "\n=== Phase 3: Evaluate (" << grid.size() << " tests) ===\n";
     std::vector<TuningResult> results;
     results.reserve(grid.size());
     for (size_t i = 0; i < grid.size(); i++)
-        results.push_back(evaluate_param_set(grid[i], segment, config.metric,
-                                              (int)i + 1, config.output_dir));
+        results.push_back(evaluate_param_set(grid[i], src, ref, config.metric, (int)i + 1));
 
+    // ── Phase 4: Ranking ─────────────────────────────────────────────────
     std::cout << "\n=== Phase 4: Ranking ===\n";
     std::sort(results.begin(), results.end(),
               [](const TuningResult& a, const TuningResult& b) { return a.score > b.score; });
@@ -534,7 +459,7 @@ int run_tuning(const TuningConfig& config) {
     }
 
     std::string json_path = config.output_dir + "/best-params.json";
-    write_results_json(json_path, results, config);
+    write_results_json(json_path, results, config, has_reference);
     std::cout << "\nResults written to " << json_path << "\n";
 
     auto t_end = std::chrono::high_resolution_clock::now();

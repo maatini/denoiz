@@ -1,4 +1,5 @@
 #include "nlm_core.h"
+#include "nlm_image_tuning.h"
 
 #include <iostream>
 #include <chrono>
@@ -7,11 +8,41 @@
 int main(int argc, char* argv[]) {
     NlmParams params;
     std::string input_path, output_path;
+    ImageTuningConfig tuning;
 
-    if (!parse_args(argc, argv, params, input_path, output_path)) {
+    if (!parse_args(argc, argv, params, input_path, output_path, &tuning)) {
         return 1;
     }
 
+    // ── Tuning mode: run parameter search, skip normal denoising ─────────
+    if (tuning.find_best_params) {
+        if (tuning.param_grid.empty()) {
+            std::cerr << "Error: --param-grid required for --find-best-params\n"
+                      << "Example: --param-grid \"h:0.05-0.5 step 0.05; patch-size:5,7,9\"\n";
+            return 1;
+        }
+        tuning.input_path = input_path;
+        if (tuning.verbose) params.verbose = true;
+
+        Image src = load_image(input_path);
+        if (src.data.empty()) {
+            std::cerr << "Error: could not load image: " << input_path << "\n";
+            return 1;
+        }
+
+        Image ref;
+        if (!tuning.reference_path.empty()) {
+            ref = load_image(tuning.reference_path);
+            if (ref.data.empty()) {
+                std::cerr << "Error: could not load reference image: " << tuning.reference_path << "\n";
+                return 1;
+            }
+        }
+
+        return run_image_tuning(src, ref, tuning);
+    }
+
+    // ── Normal denoising mode ────────────────────────────────────────────
     Image src = load_image(input_path);
     if (src.data.empty()) {
         std::cerr << "Error: could not load image\n";
