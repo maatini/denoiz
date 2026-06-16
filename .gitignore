@@ -2,3 +2,13 @@ build/
 install/
 .pi-dev-output/
 .DS_Store
+
+# Xcode
+*.xcuserdata/
+*.xcworkspace/xcuserdata/
+DerivedData/
+
+# Xcode
+*.xcuserdata/
+*.xcworkspace/xcuserdata/
+DerivedData/
