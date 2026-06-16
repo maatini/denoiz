@@ -1,5 +1,8 @@
 import AppKit
 import Foundation
+import OSLog
+
+private let logger = Logger(subsystem: "com.denoiz.ui", category: "DenoiseService")
 
 /// Wraps the `denoise` CLI binary via Process (subprocess).
 /// Handles binary discovery, argument construction, execution, and result loading.

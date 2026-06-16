@@ -10,7 +10,7 @@ struct DenoizUIApp: App {
                 .environmentObject(params)
                 .frame(minWidth: 1200, minHeight: 800)
         }
-        .windowResizability(.contentSize)
+        .defaultSize(width: 1200, height: 800)
         .windowToolbarStyle(.unified)
         .commands {
             // Keep standard File > Open etc.

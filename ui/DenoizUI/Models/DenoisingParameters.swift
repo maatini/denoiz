@@ -45,13 +45,22 @@ final class DenoisingParameters: ObservableObject {
     // ── Core NLM parameters ───────────────────────────────────────────────
 
     @Published var patchSize: Int = 7 {
-        didSet { patchSize = clampedOdd(patchSize, min: 3, max: 15) }
+        didSet {
+            let clamped = clampedOdd(patchSize, min: 3, max: 15)
+            if clamped != patchSize { patchSize = clamped }
+        }
     }
     @Published var searchWindow: Int = 21 {
-        didSet { searchWindow = clampedOdd(searchWindow, min: 7, max: 51) }
+        didSet {
+            let clamped = clampedOdd(searchWindow, min: 7, max: 51)
+            if clamped != searchWindow { searchWindow = clamped }
+        }
     }
     @Published var h: Double = 0.1 {
-        didSet { h = max(0.01, min(1.0, h)) }
+        didSet {
+            let clamped = max(0.01, min(1.0, h))
+            if clamped != h { h = clamped }
+        }
     }
 
     // ── Pipeline ──────────────────────────────────────────────────────────
@@ -94,6 +103,11 @@ final class DenoisingParameters: ObservableObject {
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────
+
+    /// Direct setters with clamping (bypasses didSet for reliability in tests).
+    func setPatchSize(_ value: Int) { patchSize = clampedOdd(value, min: 3, max: 15) }
+    func setSearchWindow(_ value: Int) { searchWindow = clampedOdd(value, min: 7, max: 51) }
+    func setH(_ value: Double) { h = max(0.01, min(1.0, value)) }
 
     private func clampedOdd(_ value: Int, min: Int, max: Int) -> Int {
         var v = Swift.max(min, Swift.min(max, value))

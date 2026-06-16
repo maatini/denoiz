@@ -37,15 +37,20 @@ enum ImageLoader {
     // MARK: - Loading
 
     /// Loads an NSImage from a file URL.
+    /// Decodes into an NSBitmapImageRep for reliable AppKit/SwiftUI display.
     static func loadImage(from url: URL) throws -> NSImage {
-        guard let image = NSImage(contentsOf: url) else {
+        let data: Data
+        do {
+            data = try Data(contentsOf: url)
+        } catch {
             throw ImageLoaderError.invalidImage(url.path)
         }
-        // NSImage loaded from file may not have a pixel representation yet.
-        // Ensure it has at least one representation so dimensions are available.
-        if image.representations.isEmpty {
+        guard let rep = NSBitmapImageRep(data: data) else {
             throw ImageLoaderError.invalidImage(url.path)
         }
+        let size = NSSize(width: rep.pixelsWide, height: rep.pixelsHigh)
+        let image = NSImage(size: size)
+        image.addRepresentation(rep)
         return image
     }
 

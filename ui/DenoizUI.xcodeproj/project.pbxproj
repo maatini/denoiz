@@ -19,6 +19,9 @@
 		000000000000000000000109 /* PipelinePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000009 /* PipelinePicker.swift */; };
 		00000000000000000000010A /* ParameterControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000000A /* ParameterControls.swift */; };
 		00000000000000000000010B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000000B /* Assets.xcassets */; };
+		00000000000000000000010C /* DenoisingParametersTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000011 /* DenoisingParametersTests.swift */; };
+		00000000000000000000010D /* ImageLoaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000012 /* ImageLoaderTests.swift */; };
+		00000000000000000000010E /* DenoiseServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000013 /* DenoiseServiceTests.swift */; };
 
 /* ── End PBXBuildFile section ────────────────────────────────────── */
 
@@ -37,6 +40,10 @@
 		00000000000000000000000B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		00000000000000000000000C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		00000000000000000000000D /* DenoizUI.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DenoizUI.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		000000000000000000000011 /* DenoisingParametersTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DenoisingParametersTests.swift; sourceTree = "<group>"; };
+		000000000000000000000012 /* ImageLoaderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageLoaderTests.swift; sourceTree = "<group>"; };
+		000000000000000000000013 /* DenoiseServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DenoiseServiceTests.swift; sourceTree = "<group>"; };
+		000000000000000000000014 /* DenoizUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DenoizUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 
 /* ── End PBXFileReference section ─────────────────────────────────── */
 
@@ -46,6 +53,7 @@
 			isa = PBXGroup;
 			children = (
 				000000000000000000000202 /* DenoizUI */,
+				000000000000000000000210 /* DenoizUITests */,
 				000000000000000000000207 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -105,8 +113,19 @@
 			isa = PBXGroup;
 			children = (
 				00000000000000000000000D /* DenoizUI.app */,
+				000000000000000000000014 /* DenoizUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		000000000000000000000210 /* DenoizUITests */ = {
+			isa = PBXGroup;
+			children = (
+				000000000000000000000011 /* DenoisingParametersTests.swift */,
+				000000000000000000000012 /* ImageLoaderTests.swift */,
+				000000000000000000000013 /* DenoiseServiceTests.swift */,
+			);
+			path = DenoizUITests;
 			sourceTree = "<group>";
 		};
 
@@ -131,6 +150,22 @@
 			productReference = 00000000000000000000000D /* DenoizUI.app */;
 			productType = "com.apple.product-type.application";
 		};
+		000000000000000000000411 /* DenoizUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 000000000000000000000613 /* Build configuration list for PBXNativeTarget "DenoizUITests" */;
+			buildPhases = (
+				000000000000000000000311 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				000000000000000000000412 /* PBXTargetDependency */,
+			);
+			name = DenoizUITests;
+			productName = DenoizUITests;
+			productReference = 000000000000000000000014 /* DenoizUITests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 
 /* ── End PBXNativeTarget section ──────────────────────────────────── */
 
@@ -145,6 +180,10 @@
 				TargetAttributes = {
 					000000000000000000000401 = {
 						CreatedOnToolsVersion = 15.2;
+					};
+					000000000000000000000411 = {
+						CreatedOnToolsVersion = 15.2;
+						TestTargetID = 000000000000000000000401;
 					};
 				};
 			};
@@ -162,6 +201,7 @@
 			projectRoot = "";
 			targets = (
 				000000000000000000000401 /* DenoizUI */,
+				000000000000000000000411 /* DenoizUITests */,
 			);
 		};
 
@@ -210,6 +250,16 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		000000000000000000000311 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				00000000000000000000010C /* DenoisingParametersTests.swift in Sources */,
+				00000000000000000000010D /* ImageLoaderTests.swift in Sources */,
+				00000000000000000000010E /* DenoiseServiceTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 
 /* ── End PBXSourcesBuildPhase section ─────────────────────────────── */
 
@@ -225,6 +275,15 @@
 		};
 
 /* ── End PBXResourcesBuildPhase section ───────────────────────────── */
+
+/* ── Begin PBXTargetDependency section ────────────────────────────── */
+
+		000000000000000000000412 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 000000000000000000000401 /* DenoizUI */;
+		};
+
+/* ── End PBXTargetDependency section ──────────────────────────────── */
 
 /* ── Begin XCBuildConfiguration section ───────────────────────────── */
 
@@ -366,6 +425,44 @@
 			};
 			name = Release;
 		};
+		000000000000000000000611 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				ENABLE_HARDENED_RUNTIME = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD = /usr/bin/clang;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.denoiz.ui.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/DenoizUI.app/Contents/MacOS/DenoizUI";
+			};
+			name = Debug;
+		};
+		000000000000000000000612 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				ENABLE_HARDENED_RUNTIME = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD = /usr/bin/clang;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.denoiz.ui.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/DenoizUI.app/Contents/MacOS/DenoizUI";
+			};
+			name = Release;
+		};
 
 /* ── End XCBuildConfiguration section ─────────────────────────────── */
 
@@ -385,6 +482,15 @@
 			buildConfigurations = (
 				000000000000000000000601 /* Debug */,
 				000000000000000000000602 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		000000000000000000000613 /* Build configuration list for PBXNativeTarget "DenoizUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				000000000000000000000611 /* Debug */,
+				000000000000000000000612 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

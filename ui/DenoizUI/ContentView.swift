@@ -21,34 +21,37 @@ struct ContentView: View {
             )
             .navigationSplitViewColumnWidth(min: 300, ideal: 340, max: 420)
         } detail: {
-            ZStack {
-                if originalImage != nil || denoisedImage != nil {
-                    ImageComparisonView(
-                        originalImage: originalImage,
-                        denoisedImage: denoisedImage,
-                        processingTime: processingTime
-                    )
-                } else {
-                    // Empty state
-                    VStack(spacing: 16) {
-                        Image(systemName: "photo.on.rectangle.angled")
-                            .font(.system(size: 56))
-                            .foregroundColor(.secondary.opacity(0.5))
-
-                        Text("Drop an image to begin")
-                            .font(.title2)
-                            .foregroundColor(.secondary)
-
-                        Text("Drag an image into the sidebar or click \"Choose File\"")
-                            .font(.body)
-                            .foregroundColor(.secondary.opacity(0.7))
-                    }
-                }
-            }
-            .navigationTitle("")
-            .toolbar(.hidden)
+            detailView
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(nsColor: .windowBackgroundColor))
         }
-        .navigationTitle("")
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    @ViewBuilder
+    private var detailView: some View {
+        if originalImage != nil || denoisedImage != nil {
+            ImageComparisonView(
+                originalImage: originalImage,
+                denoisedImage: denoisedImage,
+                processingTime: processingTime
+            )
+        } else {
+            VStack(spacing: 16) {
+                Image(systemName: "photo.on.rectangle.angled")
+                    .font(.system(size: 56))
+                    .foregroundColor(.secondary.opacity(0.5))
+
+                Text("Drop an image to begin")
+                    .font(.title2)
+                    .foregroundColor(.secondary)
+
+                Text("Drag an image into the sidebar or click \"Choose File\"")
+                    .font(.body)
+                    .foregroundColor(.secondary.opacity(0.7))
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
     }
 }
 

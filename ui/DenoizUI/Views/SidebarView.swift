@@ -1,4 +1,7 @@
 import SwiftUI
+import OSLog
+
+private let logger = Logger(subsystem: "com.denoiz.ui", category: "SidebarView")
 
 struct SidebarView: View {
     @ObservedObject var params: DenoisingParameters
@@ -133,8 +136,13 @@ struct SidebarView: View {
     // MARK: - Actions
 
     private func runDenoising() {
-        guard let url = originalImageURL else { return }
+        guard let url = originalImageURL else {
+            logger.warning("runDenoising: originalImageURL is nil, aborting")
+            errorMessage = "No image loaded. Please load an image first."
+            return
+        }
 
+        logger.info("Starting denoise: input=\(url.path), pipeline=\(params.pipeline.rawValue)")
         isProcessing = true
         errorMessage = nil
         processingTime = nil
@@ -147,15 +155,24 @@ struct SidebarView: View {
         Task {
             do {
                 let result = try await DenoiseService.denoise(config: config)
+                logger.info("Denoise succeeded: duration=\(result.duration)s, size=\(Int(result.outputSize.width))x\(Int(result.outputSize.height))")
                 await MainActor.run {
                     denoisedImage = result.image
                     processingTime = result.duration
                     isProcessing = false
+                    logger.info("UI updated: denoisedImage set, isProcessing=false")
                 }
             } catch {
+                logger.error("Denoise failed: \(error.localizedDescription)")
                 await MainActor.run {
                     errorMessage = error.localizedDescription
                     isProcessing = false
+                    // Show alert for visibility
+                    let alert = NSAlert()
+                    alert.messageText = "Denoising Failed"
+                    alert.informativeText = error.localizedDescription
+                    alert.alertStyle = .critical
+                    alert.runModal()
                 }
             }
         }
