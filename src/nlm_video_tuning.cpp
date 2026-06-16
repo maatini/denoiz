@@ -6,6 +6,9 @@ extern "C" {
 #include <libswscale/swscale.h>
 #include <libavutil/imgutils.h>
 }
+extern "C" {
+#include <libvmaf/libvmaf.h>
+}
 
 #include <iostream>
 #include <sstream>
@@ -155,6 +158,110 @@ double compute_perceptual(const Image& o, const Image& d) {
     return (es + nsn) / 2.0;
 }
 
+// ── VMAF (Netflix perceptual quality metric) ──────────────────────────
+
+double compute_vmaf(const Image& a, const Image& b) {
+    // Guard: images must match and have 3 channels
+    if (a.width != b.width || a.height != b.height || a.channels != 3 || b.channels != 3)
+        return 0.0;
+    int W = a.width, H = a.height;
+
+    // Guard: YUV420P requires even dimensions
+    if (W % 2 != 0 || H % 2 != 0) return 0.0;
+
+    // ── Init VMAF context ──────────────────────────────────────────
+    VmafConfiguration cfg = {};
+    cfg.log_level = VMAF_LOG_LEVEL_NONE;
+    cfg.n_threads = 1;
+    cfg.n_subsample = 1;
+
+    VmafContext* vmaf = nullptr;
+    if (vmaf_init(&vmaf, cfg) != 0) return 0.0;
+
+    // ── Load model ─────────────────────────────────────────────────
+    VmafModel* model = nullptr;
+    VmafModelConfig mcfg = {};
+    const char* model_path =
+        "/opt/homebrew/opt/libvmaf/share/libvmaf/model/vmaf_v0.6.1.json";
+    if (vmaf_model_load_from_path(&model, &mcfg, model_path) != 0) {
+        vmaf_close(vmaf);
+        return 0.0;
+    }
+    if (vmaf_use_features_from_model(vmaf, model) != 0) {
+        vmaf_model_destroy(model);
+        vmaf_close(vmaf);
+        return 0.0;
+    }
+
+    // ── Allocate YUV pictures ──────────────────────────────────────
+    VmafPicture ref_pic = {}, dist_pic = {};
+    if (vmaf_picture_alloc(&ref_pic, VMAF_PIX_FMT_YUV420P, 8, W, H) != 0 ||
+        vmaf_picture_alloc(&dist_pic, VMAF_PIX_FMT_YUV420P, 8, W, H) != 0) {
+        vmaf_picture_unref(&ref_pic);
+        vmaf_picture_unref(&dist_pic);
+        vmaf_model_destroy(model);
+        vmaf_close(vmaf);
+        return 0.0;
+    }
+
+    // ── RGB float [0..1] → YUV420P 8-bit (BT.601) ─────────────────
+    auto rgb_to_yuv = [](const Image& img, VmafPicture* pic) {
+        int w = img.width, h = img.height;
+        uint8_t* Y = (uint8_t*)pic->data[0];
+        uint8_t* U = (uint8_t*)pic->data[1];
+        uint8_t* V = (uint8_t*)pic->data[2];
+        int ys = (int)pic->stride[0];
+        int us = (int)pic->stride[1];
+        int vs = (int)pic->stride[2];
+
+        // Y plane (full resolution)
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                float r = img.at(x, y, 0) * 255.0f;
+                float g = img.at(x, y, 1) * 255.0f;
+                float b = img.at(x, y, 2) * 255.0f;
+                float yy = 0.299f * r + 0.587f * g + 0.114f * b;
+                Y[y * ys + x] = (uint8_t)(yy < 0 ? 0 : (yy > 255 ? 255 : yy + 0.5f));
+            }
+        }
+
+        // U, V planes (2x subsampled)
+        for (int y = 0; y < h / 2; y++) {
+            for (int x = 0; x < w / 2; x++) {
+                float rs = 0, gs = 0, bs = 0;
+                for (int dy = 0; dy < 2; dy++)
+                    for (int dx = 0; dx < 2; dx++) {
+                        int sx = x * 2 + dx, sy = y * 2 + dy;
+                        rs += img.at(sx, sy, 0) * 255.0f;
+                        gs += img.at(sx, sy, 1) * 255.0f;
+                        bs += img.at(sx, sy, 2) * 255.0f;
+                    }
+                rs /= 4.0f; gs /= 4.0f; bs /= 4.0f;
+                float uu = -0.14713f * rs - 0.28886f * gs + 0.436f * bs + 128.0f;
+                float vv = 0.615f * rs - 0.51499f * gs - 0.10001f * bs + 128.0f;
+                U[y * us + x] = (uint8_t)(uu < 0 ? 0 : (uu > 255 ? 255 : uu + 0.5f));
+                V[y * vs + x] = (uint8_t)(vv < 0 ? 0 : (vv > 255 ? 255 : vv + 0.5f));
+            }
+        }
+    };
+
+    rgb_to_yuv(a, &ref_pic);
+    rgb_to_yuv(b, &dist_pic);
+
+    // ── Submit and score ───────────────────────────────────────────
+    double score = 0.0;
+    if (vmaf_read_pictures(vmaf, &ref_pic, &dist_pic, 0) == 0)
+        vmaf_score_at_index(vmaf, model, &score, 0);
+
+    // ── Cleanup ────────────────────────────────────────────────────
+    vmaf_picture_unref(&ref_pic);
+    vmaf_picture_unref(&dist_pic);
+    vmaf_model_destroy(model);
+    vmaf_close(vmaf);
+
+    return score;
+}
+
 // ── Segment Extraction (via ffmpeg CLI) ────────────────────────────────
 
 struct SegmentFrames {
@@ -264,7 +371,7 @@ static TuningResult evaluate_param_set(
 
     auto t0 = std::chrono::high_resolution_clock::now();
 
-    double ssim_total = 0, psnr_total = 0, perc_total = 0;
+    double ssim_total = 0, psnr_total = 0, perc_total = 0, vmaf_total = 0;
 
     for (size_t i = 0; i < segment.frames.size(); i++) {
         Image dst;
@@ -278,6 +385,7 @@ static TuningResult evaluate_param_set(
         ssim_total += compute_ssim(segment.frames[i], dst);
         psnr_total += ::psnr(segment.frames[i], dst);
         perc_total += compute_perceptual(segment.frames[i], dst);
+        vmaf_total += compute_vmaf(segment.frames[i], dst);
     }
 
     auto t1 = std::chrono::high_resolution_clock::now();
@@ -287,9 +395,13 @@ static TuningResult evaluate_param_set(
     result.ssim_val = nf > 0 ? ssim_total / nf : 0;
     result.psnr_val = nf > 0 ? psnr_total / nf : 0;
     result.perceptual_val = nf > 0 ? perc_total / nf : 0;
+    result.vmaf_val = nf > 0 ? vmaf_total / nf : 0;
+    result.vmaf_val = nf > 0 ? vmaf_total / nf : 0;
 
     if (metric_name == "ssim") result.score = result.ssim_val;
     else if (metric_name == "psnr") result.score = result.psnr_val;
+    else if (metric_name == "perceptual") result.score = result.perceptual_val;
+    else if (metric_name == "vmaf") result.score = result.vmaf_val;
     else result.score = result.perceptual_val;
 
     char buf[1024];
@@ -328,6 +440,8 @@ static void write_results_json(const std::string& path,
           << "      \"ssim\": " << r.ssim_val << ",\n"
           << "      \"psnr\": " << r.psnr_val << ",\n"
           << "      \"perceptual\": " << r.perceptual_val << ",\n"
+          << "      \"vmaf\": " << r.vmaf_val << ",\n"
+          << "      \"vmaf\": " << r.vmaf_val << ",\n"
           << "      \"params\": {";
         bool first = true;
         for (const auto& kv : r.params) {
@@ -387,7 +501,8 @@ int run_tuning(const TuningConfig& config) {
         std::cout << "  #" << (i+1) << "  score=" << results[i].score
                   << "  ssim=" << results[i].ssim_val
                   << "  psnr=" << results[i].psnr_val << " dB"
-                  << "  perceptual=" << results[i].perceptual_val << "\n";
+                  << "  perceptual=" << results[i].perceptual_val
+                  << "  vmaf=" << results[i].vmaf_val << "\n";
         std::cout << "       params: {";
         bool first = true;
         for (const auto& kv : results[i].params) {

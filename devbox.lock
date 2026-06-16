@@ -105,6 +105,154 @@
         }
       }
     },
+    "ffmpeg@latest": {
+      "last_modified": "2026-06-06T12:12:42Z",
+      "resolved": "github:NixOS/nixpkgs/cbb5cf358f50aa6acc9efd6113b7bcfbc352cd73#ffmpeg",
+      "source": "devbox-search",
+      "version": "8.1",
+      "systems": {
+        "aarch64-darwin": {
+          "outputs": [
+            {
+              "name": "bin",
+              "path": "/nix/store/ngfvm0mvlcl3qy4c0va1xk7ik7hf5z5d-ffmpeg-8.1-bin",
+              "default": true
+            },
+            {
+              "name": "man",
+              "path": "/nix/store/7i34r2xda7qh2y9jsnm8jxgh31d1nk57-ffmpeg-8.1-man",
+              "default": true
+            },
+            {
+              "name": "doc",
+              "path": "/nix/store/f8f02xn2j8qjcii07ig0x3jwcd1qd7r9-ffmpeg-8.1-doc"
+            },
+            {
+              "name": "lib",
+              "path": "/nix/store/rz9xhl5q5v9gh7lhk6z8zgi98h9xzx7n-ffmpeg-8.1-lib"
+            },
+            {
+              "name": "out",
+              "path": "/nix/store/wl1lb6gb6isnglzmwvdn55hi48ac1mcl-ffmpeg-8.1"
+            },
+            {
+              "name": "data",
+              "path": "/nix/store/svw1lk5s6hgfvmndi7klg9kp9p65h4wi-ffmpeg-8.1-data"
+            },
+            {
+              "name": "dev",
+              "path": "/nix/store/arhfvajz4160hqrvllcjri0zlshyl43m-ffmpeg-8.1-dev"
+            }
+          ],
+          "store_path": "/nix/store/ngfvm0mvlcl3qy4c0va1xk7ik7hf5z5d-ffmpeg-8.1-bin"
+        },
+        "aarch64-linux": {
+          "outputs": [
+            {
+              "name": "bin",
+              "path": "/nix/store/9189pnq5pjzsbqmp9l8rkr9kwbwmg2w6-ffmpeg-8.1-bin",
+              "default": true
+            },
+            {
+              "name": "man",
+              "path": "/nix/store/mk17rxwak2j48qrs3axccsknhzwl5733-ffmpeg-8.1-man",
+              "default": true
+            },
+            {
+              "name": "data",
+              "path": "/nix/store/fgjpgi3vfl2ayqfmddfq45wzp5q09q9s-ffmpeg-8.1-data"
+            },
+            {
+              "name": "dev",
+              "path": "/nix/store/amsa6czh5400dxq2giif31vlnbcjp09z-ffmpeg-8.1-dev"
+            },
+            {
+              "name": "doc",
+              "path": "/nix/store/8anck5absahqjvikpxb87yn1inpb4fdv-ffmpeg-8.1-doc"
+            },
+            {
+              "name": "lib",
+              "path": "/nix/store/x57wbkqyx80h7lhdziqh7ikwg8lgraxc-ffmpeg-8.1-lib"
+            },
+            {
+              "name": "out",
+              "path": "/nix/store/wdrpm09qjhb155kwch9b19pag9wagpkz-ffmpeg-8.1"
+            }
+          ],
+          "store_path": "/nix/store/9189pnq5pjzsbqmp9l8rkr9kwbwmg2w6-ffmpeg-8.1-bin"
+        },
+        "x86_64-darwin": {
+          "outputs": [
+            {
+              "name": "bin",
+              "path": "/nix/store/qjil0v0y05rcrs2bzyijwyb90d5zfbzw-ffmpeg-8.1-bin",
+              "default": true
+            },
+            {
+              "name": "man",
+              "path": "/nix/store/481y1x104ril85y1fdvpf55yk6r9n732-ffmpeg-8.1-man",
+              "default": true
+            },
+            {
+              "name": "dev",
+              "path": "/nix/store/8r42iwc8pcz420gjczzgmgy86kn8wc39-ffmpeg-8.1-dev"
+            },
+            {
+              "name": "doc",
+              "path": "/nix/store/mwn24al75gjgm42nck1bckmplv2zdz8h-ffmpeg-8.1-doc"
+            },
+            {
+              "name": "lib",
+              "path": "/nix/store/7vy887l5yhwaisic91xj6rdp7m7vd8jm-ffmpeg-8.1-lib"
+            },
+            {
+              "name": "out",
+              "path": "/nix/store/his8zz9p0mc0azz3rwjyknydn0d67n6s-ffmpeg-8.1"
+            },
+            {
+              "name": "data",
+              "path": "/nix/store/hrvdbg19nsdh94rzvgxcvvkkq6rkph2k-ffmpeg-8.1-data"
+            }
+          ],
+          "store_path": "/nix/store/qjil0v0y05rcrs2bzyijwyb90d5zfbzw-ffmpeg-8.1-bin"
+        },
+        "x86_64-linux": {
+          "outputs": [
+            {
+              "name": "bin",
+              "path": "/nix/store/281zx8sanx5fcp8j6advwics7gwdvdaz-ffmpeg-8.1-bin",
+              "default": true
+            },
+            {
+              "name": "man",
+              "path": "/nix/store/dnnz7b0444c6pb6q8rippk90sl0pnz1n-ffmpeg-8.1-man",
+              "default": true
+            },
+            {
+              "name": "data",
+              "path": "/nix/store/pxxjhd9y7z2anp67bp6j4002r9bnwizf-ffmpeg-8.1-data"
+            },
+            {
+              "name": "dev",
+              "path": "/nix/store/7rv05vh6qh1sfiirhjkfjp2gskqhxdp9-ffmpeg-8.1-dev"
+            },
+            {
+              "name": "doc",
+              "path": "/nix/store/m0k08lknppyyk6dh58157i835da3qnxx-ffmpeg-8.1-doc"
+            },
+            {
+              "name": "lib",
+              "path": "/nix/store/xvrjmskfrp07gmh1zzlyfkv50nw40dcv-ffmpeg-8.1-lib"
+            },
+            {
+              "name": "out",
+              "path": "/nix/store/84h52wlvlvb2y7hmm6338m7i4m1mpi0v-ffmpeg-8.1"
+            }
+          ],
+          "store_path": "/nix/store/281zx8sanx5fcp8j6advwics7gwdvdaz-ffmpeg-8.1-bin"
+        }
+      }
+    },
     "git@latest": {
       "last_modified": "2026-04-23T13:07:47Z",
       "resolved": "github:NixOS/nixpkgs/01fbdeef22b76df85ea168fbfe1bfd9e63681b30#git",
@@ -180,6 +328,70 @@
     "github:NixOS/nixpkgs/nixpkgs-unstable": {
       "last_modified": "2026-05-15T18:21:44Z",
       "resolved": "github:NixOS/nixpkgs/d233902339c02a9c334e7e593de68855ad26c4cb?lastModified=1778869304&narHash=sha256-30sZNZoA1cqF5JNO9fVX%2BwgiQYjB7HJqqJ4ztCDeBZE%3D"
+    },
+    "libvmaf@3.0.0": {
+      "last_modified": "2026-05-21T08:15:18Z",
+      "resolved": "github:NixOS/nixpkgs/4a29d733e8a7d5b824c3d8c958a946a9867b3eb2#libvmaf",
+      "source": "devbox-search",
+      "version": "3.0.0",
+      "systems": {
+        "aarch64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/nf848kxdm2v531ps3jrz2zkajz3g6fvz-libvmaf-3.0.0",
+              "default": true
+            },
+            {
+              "name": "dev",
+              "path": "/nix/store/044s0v8z2ac8mn7g7wj05642k8q40qlp-libvmaf-3.0.0-dev"
+            }
+          ],
+          "store_path": "/nix/store/nf848kxdm2v531ps3jrz2zkajz3g6fvz-libvmaf-3.0.0"
+        },
+        "aarch64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/l8pwnnis00bvh9p8zv67djy3cnvy8k7f-libvmaf-3.0.0",
+              "default": true
+            },
+            {
+              "name": "dev",
+              "path": "/nix/store/fycxr08mk2wy3kaq8p7cmjv4mmpj5vik-libvmaf-3.0.0-dev"
+            }
+          ],
+          "store_path": "/nix/store/l8pwnnis00bvh9p8zv67djy3cnvy8k7f-libvmaf-3.0.0"
+        },
+        "x86_64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/24x5cry8833dcvsn2iabq1sqjkivyzdq-libvmaf-3.0.0",
+              "default": true
+            },
+            {
+              "name": "dev",
+              "path": "/nix/store/lzc0vm8x9i0xfa5pc0mszjypairffvfw-libvmaf-3.0.0-dev"
+            }
+          ],
+          "store_path": "/nix/store/24x5cry8833dcvsn2iabq1sqjkivyzdq-libvmaf-3.0.0"
+        },
+        "x86_64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/nvickifc1d6r6kq20f8nq55fms54hz5w-libvmaf-3.0.0",
+              "default": true
+            },
+            {
+              "name": "dev",
+              "path": "/nix/store/jmqh30lpiy9s1yllw6zz6sxpmpiq2kvn-libvmaf-3.0.0-dev"
+            }
+          ],
+          "store_path": "/nix/store/nvickifc1d6r6kq20f8nq55fms54hz5w-libvmaf-3.0.0"
+        }
+      }
     }
   }
 }

@@ -28,6 +28,7 @@ struct TuningResult {
     double psnr_val = 0.0;
     double ssim_val = 0.0;
     double perceptual_val = 0.0;
+    double vmaf_val = 0.0;
     std::string clip_path;
 };
 
@@ -48,6 +49,10 @@ double compute_ssim(const Image& a, const Image& b);
 
 // Perceptual metric: edge preservation + noise reduction (0..1, higher=better)
 double compute_perceptual(const Image& original, const Image& denoised);
+
+// VMAF perceptual quality metric (0-100, higher=better)
+// Uses Netflix libvmaf v3.0 with vmaf_v0.6.1 model
+double compute_vmaf(const Image& ref, const Image& dist);
 
 // Main tuning entry point
 int run_tuning(const TuningConfig& config);

@@ -34,8 +34,8 @@ struct VideoConfig {
     std::string output_dir = "./tuning";
 };
 
-static const char* USAGE = R"(Usage: nlm-video input.mp4 output.mp4 [options]
-       nlm-video input.mp4 --find-best-params [tuning-options]
+static const char* USAGE = R"(Usage: v-denoise input.mp4 output.mp4 [options]
+       v-denoise input.mp4 --find-best-params [tuning-options]
 
 Options:
   --preset PRESET    Quality/speed tradeoff (default: medium)
@@ -60,7 +60,7 @@ Tuning options (with --find-best-params):
   --duration SEC     Test segment duration in seconds (default: 20)
   --param-grid SPEC  Grid specification, e.g.:
                        "patch-size:5,7,9; h:0.4-1.2 step 0.2; temporal:1,2"
-  --metric METRIC    Quality metric: ssim, psnr, perceptual (default: ssim)
+  --metric METRIC    Quality metric: ssim, psnr, perceptual, vmaf (default: ssim)
   --top N            Show top N results (default: 5)
   --output-dir DIR   Output directory (default: ./tuning)
   --help             Show this message

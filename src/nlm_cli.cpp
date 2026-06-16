@@ -5,7 +5,7 @@
 
 bool parse_args(int argc, char* argv[], NlmParams& params, std::string& input, std::string& output) {
     if (argc < 3) {
-        std::cerr << "Usage: nlm_denoise input output [options]\n"
+        std::cerr << "Usage: denoise input output [options]\n"
                   << "  --patch-size N      Patch size (odd, default: 7)\n"
                   << "  --search-window N   Search window size (odd, default: 21)\n"
                   << "  --h FLOAT           Filter strength (default: 0.1)\n"

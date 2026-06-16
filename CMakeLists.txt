@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.28)
-project(nlm_denoise LANGUAGES CXX OBJCXX)
+project(denoiz LANGUAGES CXX OBJCXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -11,6 +11,7 @@ set(CMAKE_OBJCXX_FLAGS_RELEASE "-O3 -flto -ffast-math -march=armv8.5-a -mtune=ap
 # ── FFmpeg via pkg-config ──────────────────────────────────────────────
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(FFMPEG REQUIRED libavcodec libavformat libswscale libavutil)
+pkg_check_modules(LIBVMAF REQUIRED libvmaf)
 
 set(NLM_SOURCES
     src/nlm_cli.cpp
@@ -30,39 +31,41 @@ set(NLM_VIDEO_SOURCES
     src/nlm_video_tuning.cpp
 )
 
-# ── nlm_denoise ────────────────────────────────────────────────────────
-add_executable(nlm_denoise src/nlm_main.cpp ${NLM_SOURCES})
+# ── denoise ────────────────────────────────────────────────────────────
+add_executable(denoise src/nlm_main.cpp ${NLM_SOURCES})
 
-target_include_directories(nlm_denoise PRIVATE src)
+target_include_directories(denoise PRIVATE src)
 
-target_link_libraries(nlm_denoise PRIVATE
+target_link_libraries(denoise PRIVATE
     "-framework Foundation"
     "-framework Metal"
     "-framework CoreGraphics"
     "-framework Accelerate"
 )
 
-# ── nlm-video ──────────────────────────────────────────────────────────
-add_executable(nlm-video src/nlm_video_main.cpp ${NLM_SOURCES} ${NLM_VIDEO_SOURCES})
+# ── v-denoise ──────────────────────────────────────────────────────────
+add_executable(v-denoise src/nlm_video_main.cpp ${NLM_SOURCES} ${NLM_VIDEO_SOURCES})
 
-target_include_directories(nlm-video PRIVATE
+target_include_directories(v-denoise PRIVATE
     src
     ${FFMPEG_INCLUDE_DIRS}
+    ${LIBVMAF_INCLUDE_DIRS}
 )
 
-target_link_libraries(nlm-video PRIVATE
+target_link_libraries(v-denoise PRIVATE
     ${FFMPEG_LIBRARIES}
+    ${LIBVMAF_LIBRARIES}
     "-framework Foundation"
     "-framework Metal"
     "-framework CoreGraphics"
     "-framework Accelerate"
 )
 
-target_link_options(nlm-video PRIVATE ${FFMPEG_LDFLAGS})
+target_link_options(v-denoise PRIVATE ${FFMPEG_LDFLAGS} ${LIBVMAF_LDFLAGS})
 
 # ── Tests / Install ────────────────────────────────────────────────────
 enable_testing()
 add_subdirectory(test)
 
-install(TARGETS nlm_denoise RUNTIME DESTINATION bin)
-install(TARGETS nlm-video RUNTIME DESTINATION bin)
+install(TARGETS denoise RUNTIME DESTINATION bin)
+install(TARGETS v-denoise RUNTIME DESTINATION bin)

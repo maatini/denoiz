@@ -1,4 +1,4 @@
-# nlm-video Progress
+# v-denoise Progress
 
 ## Slice 1: Frame-by-Frame
 - FFmpeg decode → NLM pipeline → encode (H.264)

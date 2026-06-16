@@ -1,8 +1,8 @@
-# nlm-video PRD
+# v-denoise PRD
 
 ## Ziel
 
-`nlm-video` — eine CLI für Videodenoising, die den bestehenden NLM-Algorithmus aus `nlm_denoise` auf Videoframes anwendet. Schnell, qualitativ hochwertig, Apple-Silicon-optimiert.
+`v-denoise` — eine CLI für Videodenoising, die den bestehenden NLM-Algorithmus aus `denoise` auf Videoframes anwendet. Schnell, qualitativ hochwertig, Apple-Silicon-optimiert.
 
 Zusätzlich: **Parameter-Tuning-Modus** (`--find-best-params`), der kurze Testclips mit verschiedenen Parameter-Kombinationen verarbeitet und die besten Einstellungen automatisch ermittelt.
 
@@ -11,7 +11,7 @@ Zusätzlich: **Parameter-Tuning-Modus** (`--find-best-params`), der kurze Testcl
 ## Architekturüberblick
 
 ```
-nlm-video input.mp4 output.mp4 [options]
+v-denoise input.mp4 output.mp4 [options]
       │
       ▼
 ┌─────────────────────────────────────────────┐
@@ -20,7 +20,7 @@ nlm-video input.mp4 output.mp4 [options]
 └──────────────────┬──────────────────────────┘
                    ▼
 ┌─────────────────────────────────────────────┐
-│  NLM Pipeline (aus nlm_denoise)             │  denoise
+│  NLM Pipeline (aus denoise)             │  denoise
 │  pro Frame: nlm_denoise_metal / _wavelet / … │
 └──────────────────┬──────────────────────────┘
                    ▼
@@ -31,9 +31,9 @@ nlm-video input.mp4 output.mp4 [options]
 ```
 
 **Designprinzipien:**
-- `nlm_denoise`-Bibliothek pro Frame aufrufen (kein Duplizieren von NLM-Code)
+- `denoise`-Bibliothek pro Frame aufrufen (kein Duplizieren von NLM-Code)
 - FFmpeg nur für I/O (decode frames → raw buffer, encode raw buffer → file)
-- CLI-Metapher von `nlm_denoise` übernehmen (gleiche Parameterstruktur)
+- CLI-Metapher von `denoise` übernehmen (gleiche Parameterstruktur)
 - Pipe-Architektur: Decoder → Filter → Encoder, parallelisiert
 
 ---
@@ -44,7 +44,7 @@ nlm-video input.mp4 output.mp4 [options]
 
 **CLI:**
 ```
-nlm-video input.mp4 output.mp4 [--preset medium] [--strength 0.8]
+v-denoise input.mp4 output.mp4 [--preset medium] [--strength 0.8]
 ```
 
 ### Aufgaben
@@ -52,8 +52,8 @@ nlm-video input.mp4 output.mp4 [--preset medium] [--strength 0.8]
 1. **devbox.json: ffmpeg als Dependency hinzufügen**
    - `ffmpeg@latest` (enthält CLI + libs: libavcodec, libavformat, libswscale, libavutil)
 
-2. **CMakeLists.txt: nlm-video Target anlegen**
-   - Neues Executable `nlm-video`, linkt gegen bestehende `nlm_core.h` Pipeline-Funktionen
+2. **CMakeLists.txt: v-denoise Target anlegen**
+   - Neues Executable `v-denoise`, linkt gegen bestehende `nlm_core.h` Pipeline-Funktionen
    - Linkt gegen FFmpeg-Libs (avcodec, avformat, swscale, avutil)
    - NLM-Code wird nicht dupliziert — bestehende `.cpp`-Dateien werden mit-kompiliert
 
@@ -186,7 +186,7 @@ nlm-video input.mp4 output.mp4 [--preset medium] [--strength 0.8]
    - Frame-Count aus Input-Video ermitteln (avformat → duration / time_base)
    - Aktuellen Fortschritt in % ausgeben
    - Geschätzte Restzeit (ETA) basierend auf durchschnittlicher Frame-Zeit
-   - `\r`-basiertes In-Place-Updating (wie `nlm_denoise`)
+   - `\r`-basiertes In-Place-Updating (wie `denoise`)
 
 3. **10-bit / HDR / Farbraum-Unterstützung**
    - 10-bit Input → 16-bit float Zwischenrepräsentation (statt 8-bit → 0..1)
@@ -218,7 +218,7 @@ nlm-video input.mp4 output.mp4 [--preset medium] [--strength 0.8]
 1. **Nur-Denoising-Modus (ohne Re-Encoding)**
    - `--frames-out DIR/` → denoiste Frames als PNG-Sequenz speichern
    - `--raw-out FILE` → denoiste Frames als raw float binary speichern
-   - Use Case: "Denoise mit nlm-video → dann mit HandBrake encodieren"
+   - Use Case: "Denoise mit v-denoise → dann mit HandBrake encodieren"
 
 2. **Filter-Chain (Denoise + Sharpen + Deinterlace)**
    - `--sharpen FLOAT` → Unsharp Mask (USM) nach NLM anwenden
@@ -232,8 +232,8 @@ nlm-video input.mp4 output.mp4 [--preset medium] [--strength 0.8]
 
 4. **HandBrake-Integration**
    - README: Empfohlenen Workflow dokumentieren
-   - Beispiel-Skript: `denoise_and_encode.sh` (nlm-video → HandBrake CLI)
-   - FAQ: Wann nlm-video + HandBrake vs. nlm-video allein?
+   - Beispiel-Skript: `denoise_and_encode.sh` (v-denoise → HandBrake CLI)
+   - FAQ: Wann v-denoise + HandBrake vs. v-denoise allein?
 
 ### Verifikation
 
@@ -280,7 +280,7 @@ Der User soll schnell gute NLM-Einstellungen für ein bestimmtes Video finden, o
 ### CLI-Signatur
 
 ```
-nlm-video input.mp4 \
+v-denoise input.mp4 \
   --find-best-params \
   --start 00:12:45 \
   --duration 20 \
@@ -378,7 +378,7 @@ output-dir/
 ├── ...
 ├── result_NNN.mp4
 ├── comparison.mp4             # Side-by-Side Top-3 (optional)
-└── preset_nlm-video.json      # Bestes Parameter-Set als Preset (optional)
+└── preset_v-denoise.json      # Bestes Parameter-Set als Preset (optional)
 ```
 
 ### Umsetzungsslices

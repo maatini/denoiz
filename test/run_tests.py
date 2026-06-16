@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Test harness for nlm_denoise. Called by ctest."""
+"""Test harness for denoise. Called by ctest."""
 
 import subprocess
 import sys
@@ -9,7 +9,7 @@ import struct
 import zlib
 import math
 
-BINARY = os.environ.get("NLM_BINARY", "./nlm_denoise")
+BINARY = os.environ.get("NLM_BINARY", "./denoise")
 
 
 def create_png(w, h, channels, pixels):
@@ -166,7 +166,7 @@ def test_ground_truth(tmpdir):
 
     rc, stdout, stderr = run_nlm(noisy_path, output_path,
                                   ["--patch-size", "7", "--search-window", "21", "--h", "0.1"])
-    assert rc == 0, f"nlm_denoise failed: {stderr}"
+    assert rc == 0, f"denoise failed: {stderr}"
 
     _, _, _, clean_px = read_png_raw(clean_png)
     _, _, _, noisy_px = read_png_raw(noisy_png)

@@ -50,7 +50,7 @@ Die wertvollsten Adaptionen aus 2504.12276:
 
 ---
 
-## Phase 10 — nlm-video Parameter Tuning
+## Phase 10 — v-denoise Parameter Tuning
 
 | Slice | Beschreibung | Status | Datum |
 |-------|-------------|--------|-------|

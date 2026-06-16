@@ -1,4 +1,4 @@
-# nlm_denoise — NLM Denoising for Apple Silicon
+# denoise — NLM Denoising for Apple Silicon
 
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-blue)](https://en.cppreference.com/w/cpp/20)
 [![macOS](https://img.shields.io/badge/platform-macOS%20Apple%20Silicon-lightgrey)](https://www.apple.com/mac/)
@@ -8,8 +8,8 @@
 
 High-performance Non-Local Means (NLM) denoising for Apple Silicon (M1–M4). Two tools:
 
-- **nlm_denoise** — image denoising CLI with 8 pipelines: Metal GPU, ARM NEON + GCD, Wavelet, Adaptive h, Coarse-to-Fine, and more. Research-backed adaptations from NTIRE 2025 Challenge (SRC-B #1, 31.20 dB).
-- **nlm-video** — video denoising CLI with temporal NLM, content presets, async GPU pipeline. FFmpeg-based.
+- **denoise** — image denoising CLI with 8 pipelines: Metal GPU, ARM NEON + GCD, Wavelet, Adaptive h, Coarse-to-Fine, and more. Research-backed adaptations from NTIRE 2025 Challenge (SRC-B #1, 31.20 dB).
+- **v-denoise** — video denoising CLI with temporal NLM, content presets, async GPU pipeline. FFmpeg-based.
 
 ![Denoiz](denoiz.png)
 
@@ -24,15 +24,15 @@ cd nlm
 devbox shell
 devbox run build
 devbox run test
-devbox run install   # → install/bin/nlm_denoise  +  install/bin/nlm-video
+devbox run install   # → install/bin/denoise  +  install/bin/v-denoise
 ```
 
-## nlm_denoise (images)
+## denoise (images)
 
 ### Usage
 
 ```
-nlm_denoise input.png output.png [options]
+denoise input.png output.png [options]
 ```
 
 ### Parameter
@@ -57,16 +57,16 @@ nlm_denoise input.png output.png [options]
 
 ```bash
 # Quality-first: Adaptive h (best PSNR)
-nlm_denoise noisy.jpg clean.png --adaptive --h 0.1
+denoise noisy.jpg clean.png --adaptive --h 0.1
 
 # Best balance: GPU
-nlm_denoise noisy.jpg clean.png --use-gpu --h 0.12
+denoise noisy.jpg clean.png --use-gpu --h 0.12
 
 # Extreme speed: Wavelet (preview/real-time)
-nlm_denoise noisy.jpg clean.png --wavelet --h 0.1
+denoise noisy.jpg clean.png --wavelet --h 0.1
 
 # Benchmark comparison
-nlm_denoise noisy.jpg /dev/null --use-gpu --benchmark
+denoise noisy.jpg /dev/null --use-gpu --benchmark
 ```
 
 ### Performance (Apple M2, 256×256 RGB, patch=7, search=21, h=0.1)
@@ -105,12 +105,12 @@ nlm_denoise noisy.jpg /dev/null --use-gpu --benchmark
 
 ---
 
-## nlm-video (videos)
+## v-denoise (videos)
 
 ### Usage
 
 ```
-nlm-video input.mp4 output.mp4 [options]
+v-denoise input.mp4 output.mp4 [options]
 ```
 
 ### Parameter
@@ -135,19 +135,19 @@ nlm-video input.mp4 output.mp4 [options]
 
 ```bash
 # Quality-first: film preset (adaptive h)
-nlm-video noisy.mp4 clean.mp4 --preset film
+v-denoise noisy.mp4 clean.mp4 --preset film
 
 # Fast: grain preset + sharpen
-nlm-video noisy.mp4 clean.mp4 --preset grain --sharpen 0.5
+v-denoise noisy.mp4 clean.mp4 --preset grain --sharpen 0.5
 
 # Temporal denoising (reduces flicker)
-nlm-video noisy.mp4 clean.mp4 --temporal --frame-count 5
+v-denoise noisy.mp4 clean.mp4 --temporal --frame-count 5
 
 # Export frames only (no video re-encode)
-nlm-video noisy.mp4 /dev/null --frames-out ./denoised_frames
+v-denoise noisy.mp4 /dev/null --frames-out ./denoised_frames
 
 # H.265 output
-nlm-video noisy.mp4 clean.mp4 --preset film --codec h265
+v-denoise noisy.mp4 clean.mp4 --preset film --codec h265
 ```
 
 ### Performance (Apple M2, 320×240, 25fps)
@@ -181,7 +181,7 @@ nlm-video noisy.mp4 clean.mp4 --preset film --codec h265
 
 Research backed by [NTIRE 2025 Image Denoising Challenge Report](https://arxiv.org/abs/2504.12276) (SRC-B #1, 31.20 dB):
 
-| Adaption          | NTIRE Source          | nlm_denoise Result    |
+| Adaption          | NTIRE Source          | denoise Result    |
 |-------------------|-----------------------|-----------------------|
 | Wavelet-domain    | Wavelet Transform Loss | 1705× speedup         |
 | Adaptive h        | Data Selection        | 77.8 dB, +6 dB PSNR   |
@@ -208,7 +208,7 @@ src/
   nlm_metal.mm                Metal GPU compute pipeline (embedded shader)
   nlm_metal_kernels.metal     Original Metal source (preserved, not used at runtime)
   nlm_ane_analysis.txt        ANE/NPU feasibility analysis
-  nlm_video_main.cpp          nlm-video entry + FFmpeg pipeline
+  nlm_video_main.cpp          v-denoise entry + FFmpeg pipeline
   nlm_video_temporal.h/cpp    Temporal multi-frame NLM denoiser
 test/
   run_tests.py        Test suite (ground truth, grayscale, edge cases, CLI)
@@ -218,7 +218,7 @@ test/
 
 ## Limitations
 
-- PNG output only for nlm_denoise (stb_image_write PNG backend)
+- PNG output only for denoise (stb_image_write PNG backend)
 - Metal GPU: requires macOS with Apple Silicon GPU
 - No color management / gamma correction
 - `--sigma` parameter reserved for future noise application

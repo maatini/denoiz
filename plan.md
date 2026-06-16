@@ -7,7 +7,7 @@ Hochperformante, produktionsreife CLI-Anwendung für Non-Local Means (NLM) Denoi
 ## CLI-Signatur
 
 ```
-nlm_denoise input.png output.png \
+denoise input.png output.png \
   --patch-size 7 \
   --search-window 21 \
   --h 0.1 \
@@ -186,13 +186,13 @@ Nicht adaptiert (DL-spezifisch): Hybrid Transformer+CNN, Data Selection, Model E
 
 ---
 
-### Phase 10 — nlm-video Parameter Tuning (--find-best-params)
+### Phase 10 — v-denoise Parameter Tuning (--find-best-params)
 
 **Ziel:** Schnell optimale NLM-Parameter für ein bestimmtes Video finden, ohne das gesamte Video mehrfach zu verarbeiten.
 
 **CLI:**
 ```
-nlm-video input.mp4 \
+v-denoise input.mp4 \
   --find-best-params \
   --start 00:12:45 \
   --duration 20 \
