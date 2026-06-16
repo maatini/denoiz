@@ -260,3 +260,47 @@ v-denoise input.mp4 \
 - [ ] `--save-preset FILE`: Beste Parameter als Preset-Datei speichern
 - [ ] `--preset FILE`: Gespeichertes Preset laden
 - [ ] `--compare-with-handbrake`: Automatischer Vergleich mit HandBrake NLMeans
+
+---
+
+### Phase 11 — DenoizUI macOS App (SwiftUI)
+
+**Ziel:** Native macOS UI mit Side-by-Side-Vergleich für einfachere Bedienung.
+
+- [x] Standalone Xcode-Projekt unter `ui/` (neben CMake, kein Umbau)
+- [x] `DenoisingParameters` — `@ObservableObject` mit allen NLM-Parametern + `PipelineMode` Enum
+- [x] `DenoiseService` — `Process`-Wrapper für `denoise`-Binary-Aufruf
+- [x] `ImageLoader` — NSImage ↔ Temp-Datei I/O Utilities
+- [x] `SidebarView` — Drag & Drop, Pipeline-Auswahl, Parameter-Slider, Aktionen
+- [x] `ImageComparisonView` — Side-by-Side mit synchronem Zoom (0.25x–8x) und Pan
+- [x] `ImageDropZone` — Datei-Drop + NSOpenPanel mit UTType-Filter
+- [x] `ParameterControls` — Slider für patch-size (3–15), search-window (7–51), h (0.01–1.0)
+- [x] Build-Integration: Xcode Build Phase kopiert `build/denoise` in App-Bundle
+- [x] macOS 13+ Target, Dark Mode, Fehlerbehandlung
+
+**Nicht in Phase 1:**
+- Video-Denoising (kommt in Phase 12)
+- Direktes C++-Library-Linking via Swift-C++ Interop (Phase 13)
+- Live-Preview, Batch-Processing, Before/After-Slider
+
+---
+
+### Phase 11 — DenoizUI macOS App (SwiftUI)
+
+**Ziel:** Native macOS UI mit Side-by-Side-Vergleich für einfachere Bedienung.
+
+- [x] Standalone Xcode-Projekt unter `ui/` (neben CMake, kein Umbau)
+- [x] `DenoisingParameters` — `@ObservableObject` mit allen NLM-Parametern + `PipelineMode` Enum
+- [x] `DenoiseService` — `Process`-Wrapper für `denoise`-Binary-Aufruf
+- [x] `ImageLoader` — NSImage ↔ Temp-Datei I/O Utilities
+- [x] `SidebarView` — Drag & Drop, Pipeline-Auswahl, Parameter-Slider, Aktionen
+- [x] `ImageComparisonView` — Side-by-Side mit synchronem Zoom (0.25x–8x) und Pan
+- [x] `ImageDropZone` — Datei-Drop + NSOpenPanel mit UTType-Filter
+- [x] `ParameterControls` — Slider für patch-size (3–15), search-window (7–51), h (0.01–1.0)
+- [x] Build-Integration: Xcode Build Phase kopiert `build/denoise` in App-Bundle
+- [x] macOS 13+ Target, Dark Mode, Fehlerbehandlung
+
+**Nicht in Phase 1:**
+- Video-Denoising (kommt in Phase 12)
+- Direktes C++-Library-Linking via Swift-C++ Interop (Phase 13)
+- Live-Preview, Batch-Processing, Before/After-Slider

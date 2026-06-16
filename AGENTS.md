@@ -35,3 +35,27 @@ Befolge die [Karpathy Guidelines](https://x.com/karpathy/status/2015883857489522
 ## Projekt
 
 Dieses Verzeichnis enthält ein devbox-basiertes Projekt. Vor Arbeiten am Code `devbox.json` prüfen.
+
+### ui/ — DenoizUI macOS App (SwiftUI)
+
+Das `ui/`-Verzeichnis enthält ein **eigenständiges Xcode-Projekt** (nicht CMake-integriert):
+- `ui/DenoizUI.xcodeproj` — Xcode-Projekt für die SwiftUI-App
+- `ui/DenoizUI/` — Swift-Quellcode (~1.326 Zeilen)
+- Build-Reihenfolge: zuerst `cmake --build build` (CLI-Binary), dann Xcode-Projekt ⌘R
+- Die App ruft das `denoise`-Binary via `Process` auf (kein direktes C++-Linking)
+- **Xcode 26 Build-Fixes**: Bei Build-Fehlern prüfen ob `LD=/usr/bin/clang`, `ENABLE_DEBUG_DYLIB=NO`, `ENABLE_USER_SCRIPT_SANDBOXING=NO` im pbxproj gesetzt sind
+- Edit-Tool-Warnung: NIEMALS `replace_all: true` mit `};` im pbxproj verwenden!
+
+DenoizUI-Memories: [[denoiz-macos-ui-app]], [[denoiz-xcode26-build]], [[denoiz-editing-patterns]]
+
+### ui/ — DenoizUI macOS App (SwiftUI)
+
+Das `ui/`-Verzeichnis enthält ein **eigenständiges Xcode-Projekt** (nicht CMake-integriert):
+- `ui/DenoizUI.xcodeproj` — Xcode-Projekt für die SwiftUI-App
+- `ui/DenoizUI/` — Swift-Quellcode (~1.326 Zeilen)
+- Build-Reihenfolge: zuerst `cmake --build build` (CLI-Binary), dann Xcode-Projekt ⌘R
+- Die App ruft das `denoise`-Binary via `Process` auf (kein direktes C++-Linking)
+- **Xcode 26 Build-Fixes**: Bei Build-Fehlern prüfen ob `LD=/usr/bin/clang`, `ENABLE_DEBUG_DYLIB=NO`, `ENABLE_USER_SCRIPT_SANDBOXING=NO` im pbxproj gesetzt sind
+- Edit-Tool-Warnung: NIEMALS `replace_all: true` mit `};` im pbxproj verwenden!
+
+DenoizUI-Memories: [[denoiz-macos-ui-app]], [[denoiz-xcode26-build]], [[denoiz-editing-patterns]]

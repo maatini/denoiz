@@ -71,3 +71,53 @@ Die wertvollsten Adaptionen aus 2504.12276:
 ### Test-Ergebnis (eblue53.mp4, 640x480)
 - 3 h-Werte (0.1/0.3/0.5) auf 0.5s: 67s → beste SSIM 0.982 (h=0.1)
 - 6 Komb. (patch-size:5,7 × h:0.2-0.6) auf 0.3s: 58s → beste PSNR 38.9 dB (h=0.2, patch=5)
+
+---
+
+## Phase 11 — DenoizUI macOS App
+
+| Slice | Beschreibung | Status | Datum |
+|-------|-------------|--------|-------|
+| 11.1 | Xcode Projekt + Build-System | 🟢 abgeschlossen | 2026-06-16 |
+| 11.2 | SwiftUI Views (Sidebar, Comparison, DropZone) | 🟢 abgeschlossen | 2026-06-16 |
+| 11.3 | DenoiseService (Process-Wrapper) | 🟢 abgeschlossen | 2026-06-16 |
+| 11.4 | Build & Verify | 🟢 abgeschlossen | 2026-06-16 |
+
+### Umgesetzt
+
+- Standalone Xcode-Projekt unter `ui/DenoizUI.xcodeproj`
+- **14 Swift-Dateien** (~1.326 Zeilen): App, ContentView, Model, Service, Utility, 5 Views
+- **Process-basierter CLI-Aufruf**: `denoise` Binary via `Process` (kein direktes C++-Linking)
+- **Side-by-Side-Vergleich**: synchroner Zoom/Pan via NSScrollView + MagnificationGesture
+- **Drag & Drop**: .onDrop + NSOpenPanel für PNG/JPEG/TIFF/BMP
+- **7 Pipelines**: NEON, Metal GPU, Fast, Wavelet, Adaptive h, Ensemble, Coarse-to-Fine
+- **Parameter-Steuerung**: patch-size (3–15 odd), search-window (7–51 odd), h (0.01–1.0), Threads
+- **Save Result**: NSSavePanel (kein fileExporter wegen Generics-Issue)
+- **Fehlerbehandlung**: Binary nicht gefunden, Process-Fehler, Timeout (5 min)
+- **Dark Mode**: automatisch via SwiftUI system colors
+- **Xcode 26 Build-Fixes**: `LD=/usr/bin/clang`, `ENABLE_DEBUG_DYLIB=NO`, `ENABLE_USER_SCRIPT_SANDBOXING=NO`
+
+---
+
+## Phase 11 — DenoizUI macOS App
+
+| Slice | Beschreibung | Status | Datum |
+|-------|-------------|--------|-------|
+| 11.1 | Xcode Projekt + Build-System | 🟢 abgeschlossen | 2026-06-16 |
+| 11.2 | SwiftUI Views (Sidebar, Comparison, DropZone) | 🟢 abgeschlossen | 2026-06-16 |
+| 11.3 | DenoiseService (Process-Wrapper) | 🟢 abgeschlossen | 2026-06-16 |
+| 11.4 | Build & Verify | 🟢 abgeschlossen | 2026-06-16 |
+
+### Umgesetzt
+
+- Standalone Xcode-Projekt unter `ui/DenoizUI.xcodeproj`
+- **14 Swift-Dateien** (~1.326 Zeilen): App, ContentView, Model, Service, Utility, 5 Views
+- **Process-basierter CLI-Aufruf**: `denoise` Binary via `Process` (kein direktes C++-Linking)
+- **Side-by-Side-Vergleich**: synchroner Zoom/Pan via NSScrollView + MagnificationGesture
+- **Drag & Drop**: .onDrop + NSOpenPanel für PNG/JPEG/TIFF/BMP
+- **7 Pipelines**: NEON, Metal GPU, Fast, Wavelet, Adaptive h, Ensemble, Coarse-to-Fine
+- **Parameter-Steuerung**: patch-size (3–15 odd), search-window (7–51 odd), h (0.01–1.0), Threads
+- **Save Result**: NSSavePanel (kein fileExporter wegen Generics-Issue)
+- **Fehlerbehandlung**: Binary nicht gefunden, Process-Fehler, Timeout (5 min)
+- **Dark Mode**: automatisch via SwiftUI system colors
+- **Xcode 26 Build-Fixes**: `LD=/usr/bin/clang`, `ENABLE_DEBUG_DYLIB=NO`, `ENABLE_USER_SCRIPT_SANDBOXING=NO`

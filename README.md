@@ -1,26 +1,77 @@
 # denoise — NLM Denoising for Apple Silicon
 
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-blue)](https://en.cppreference.com/w/cpp/20)
+[![Swift](https://img.shields.io/badge/Swift-5.0-orange)](https://swift.org)
+[![SwiftUI](https://img.shields.io/badge/UI-SwiftUI-blue)](https://developer.apple.com/xcode/swiftui/)
 [![macOS](https://img.shields.io/badge/platform-macOS%20Apple%20Silicon-lightgrey)](https://www.apple.com/mac/)
 [![Metal](https://img.shields.io/badge/GPU-Metal-purple)](https://developer.apple.com/metal/)
 [![FFmpeg](https://img.shields.io/badge/media-FFmpeg-green)](https://ffmpeg.org)
 [![Devbox](https://img.shields.io/badge/build-devbox-blue)](https://www.jetify.com/devbox/)
 
-High-performance Non-Local Means (NLM) denoising for Apple Silicon (M1–M4). Two tools:
+High-performance Non-Local Means (NLM) denoising for Apple Silicon (M1–M4). Three tools:
 
 - **denoise** — image denoising CLI with 8 pipelines: Metal GPU, ARM NEON + GCD, Wavelet, Adaptive h, Coarse-to-Fine, and more. Research-backed adaptations from NTIRE 2025 Challenge (SRC-B #1, 31.20 dB).
 - **v-denoise** — video denoising CLI with temporal NLM, content presets, async GPU pipeline. FFmpeg-based.
+- **DenoizUI** — native macOS SwiftUI app with side-by-side comparison, drag & drop, and parameter controls.
 
 ![Denoiz](denoiz.png)
 
-## Prerequisites
+## Quickstart
 
-Devbox only. No system dependencies beyond what devbox provides.
+### 1. Install & Build (2 Minuten)
+
+**Voraussetzungen:** macOS 13+ (Apple Silicon), Xcode 15+
+
+```bash
+# Devbox installieren
+curl -fsSL https://www.jetify.com/devbox/install.sh | bash
+
+# Projekt bauen
+git clone https://github.com/maatini/denoiz.git
+cd denoiz
+devbox shell
+devbox run build          # → build/denoise + build/v-denoise
+```
+
+### 2. UI starten
+
+```bash
+open ui/DenoizUI.xcodeproj
+# In Xcode: ⌘R drücken
+```
+
+Die App öffnet sich als natives macOS-Fenster (1200×800).
+
+### 3. Workflow
+
+```
+Bild einfügen  →  Pipeline wählen  →  ⌘↩ (Denoise)  →  Ergebnis speichern
+```
+
+| Schritt | Aktion |
+|---------|--------|
+| **Bild laden** | Per Drag & Drop in die Sidebar ziehen, oder „Choose File…" klicken. Unterstützt PNG, JPEG, TIFF, BMP. |
+| **Pipeline wählen** | Radio-Buttons in der Sidebar: NEON (default), Metal GPU, Fast, Wavelet, Adaptive h, Ensemble, Coarse-to-Fine. |
+| **Parameter anpassen** | Slider für Patch Size (3–15), Search Window (7–51), Filter Strength h (0.01–1.0). Thread-Anzahl via Dropdown. |
+| **Denoise starten** | „Denoise"-Button oder ⌘↩. Fortschrittsbalken erscheint während der Verarbeitung. |
+| **Vergleichen** | Original links, entrauschtes Bild rechts. Synchroner Zoom (0.25×–8×) und Pan. Zoom-Reset mit ↺-Button. |
+| **Speichern** | „Save Result…" → PNG via System-Dialog. |
+| **Zurücksetzen** | „Reset" entfernt das Ergebnis und erlaubt einen neuen Durchlauf. |
+
+### 4. Fehlerbehandlung
+
+- **„denoise binary not found"**: CLI-Binary fehlt. `devbox run build` ausführen.
+- **Verarbeitung hängt**: Nach 5 Minuten Timeout. Größere Bilder mit kleinerem Search-Window oder `--fast`-Pipeline versuchen.
+- **Sandbox-Fehler beim Build**: Xcode 26 erfordert spezielle Build-Settings (im Projekt bereits gesetzt).
+
+---
+
+## CLI-Installation (Devbox)
 
 ```bash
 curl -fsSL https://www.jetify.com/devbox/install.sh | bash
 
-cd nlm
+cd denoiz
 devbox shell
 devbox run build
 devbox run test
@@ -190,7 +241,50 @@ Research backed by [NTIRE 2025 Image Denoising Challenge Report](https://arxiv.o
 
 See `src/nlm_ane_analysis.txt` for ANE feasibility study.
 
-## Architecture
+## DenoizUI (macOS App)
+
+Native SwiftUI app for interactive image denoising. Requires macOS 13+ and Xcode 15+.
+
+### Features
+
+- **Drag & Drop** image loading (PNG, JPEG, TIFF, BMP)
+- **7 pipeline modes**: NEON/GCD, Metal GPU, Fast, Wavelet, Adaptive h, Ensemble, Coarse-to-Fine
+- **Side-by-side comparison** with synchronized zoom (0.25×–8×) and pan
+- **Parameter controls**: patch-size (3–15), search-window (7–51), filter strength h (0.01–1.0), threads
+- **Save results** via system save panel
+- **Dark Mode** support (automatic via SwiftUI)
+
+### Build & Run
+
+```bash
+# 1. Build the CLI binary first
+cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+
+# 2. Open and run the Xcode project
+open ui/DenoizUI.xcodeproj
+# ⌘R to run
+```
+
+The app calls the `denoise` CLI binary via subprocess. The binary is automatically copied into the app bundle during the Xcode build phase.
+
+### Architecture
+
+```
+ui/
+├── DenoizUI.xcodeproj/        # Xcode project (standalone from CMake)
+└── DenoizUI/
+    ├── Models/                # DenoisingParameters (ObservableObject)
+    ├── Services/              # DenoiseService (Process wrapper)
+    ├── Utilities/             # ImageLoader (NSImage ↔ temp files)
+    └── Views/                 # SidebarView, ImageComparisonView, etc.
+```
+
+See `ui/README.md` for detailed UI architecture documentation.
+
+---
+
+## Architecture (CLI)
 
 ```
 src/
